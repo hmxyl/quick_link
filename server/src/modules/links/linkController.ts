@@ -236,22 +236,18 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { url, title, description, icon, tags, accounts } = req.body;
 
-    if (!url) {
-      res.status(400).json({ success: false, error: "URL is required" });
-      return;
-    }
-
-    const normalizedUrl = normalizeUrl(url);
-    let effectiveTitle = title?.trim() || titleFromUrl(normalizedUrl);
+    // URL 可为空: 空 URL 时跳过归一化与元数据抓取
+    const hasUrl = !!url && String(url).trim();
+    const normalizedUrl = hasUrl ? normalizeUrl(url) : "";
+    let effectiveTitle = title?.trim() || (hasUrl ? titleFromUrl(normalizedUrl) : "");
     let effectiveDescription = description?.trim() || undefined;
     let effectiveIcon = icon as string | undefined;
     const now = new Date().toISOString();
 
-    // Auto icon / metadata assignment
-    if (normalizedUrl.startsWith("file://")) {
-      // Local files use the folder icon by default
+    // Auto icon / metadata assignment (仅有 URL 时执行)
+    if (hasUrl && normalizedUrl.startsWith("file://")) {
       if (!effectiveIcon) effectiveIcon = "folder";
-    } else if (/^https?:\/\//i.test(normalizedUrl)) {
+    } else if (hasUrl && /^https?:\/\//i.test(normalizedUrl)) {
       const needMeta = !effectiveIcon || !title?.trim() || !description?.trim();
       if (needMeta) {
         const meta = await fetchLinkMetadata(normalizedUrl);
@@ -260,6 +256,8 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
         if (!effectiveDescription && meta.description) effectiveDescription = meta.description;
       }
       if (!effectiveIcon) effectiveIcon = "globe";
+    } else if (!hasUrl && !effectiveIcon) {
+      effectiveIcon = "link";
     }
 
     // Determine if this link has account credentials (多个账号; 无密码的条目忽略)
@@ -305,6 +303,88 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
     });
 
     res.status(201).json({ success: true, data: { _id: link._id, url: link.url, title: link.title, icon: link.icon, hasAccount: link.hasAccount, createdAt: link.createdAt } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+// 按 URL 精确搜索已有链接 (用于添加时去重提示)
+export async function searchByUrl(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const url = req.query.url as string;
+    if (!url) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+    const normalizedUrl = normalizeUrl(url);
+    const docs: Link[] = await new Promise((resolve, reject) => {
+      db.links.find({ userId: req.userId, url: normalizedUrl }).sort({ createdAt: -1 }).exec((err, docs) => {
+        if (err) reject(err);
+        else resolve(docs as Link[]);
+      });
+    });
+    const safeData = docs.map((doc) => ({
+      _id: doc._id,
+      url: doc.url,
+      title: doc.title,
+      description: doc.description,
+      icon: doc.icon,
+      tags: doc.tags,
+      hasAccount: doc.hasAccount || false,
+      accountCount: doc.accounts?.length || 0,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    }));
+    res.json({ success: true, data: safeData });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+// 批量设置标签 (覆盖选中链接的标签)
+export async function batchUpdateTags(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { ids, tags, mode } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: "请选择至少一个链接" });
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      res.status(400).json({ success: false, error: "标签参数无效" });
+      return;
+    }
+    // mode: "set"=覆盖 / "add"=追加 / "remove"=移除, 默认 set
+    const op = mode === "add" || mode === "remove" ? mode : "set";
+    let count = 0;
+    for (const id of ids) {
+      const link: Link | null = await new Promise((resolve, reject) => {
+        db.links.findOne({ _id: id, userId: req.userId }, (err, doc) => {
+          if (err) reject(err);
+          else resolve(doc as Link | null);
+        });
+      });
+      if (!link) continue;
+      let newTags: string[];
+      if (op === "add") {
+        const merged = new Set([...(link.tags || []), ...tags]);
+        newTags = [...merged];
+      } else if (op === "remove") {
+        const removeSet = new Set(tags);
+        newTags = (link.tags || []).filter((t) => !removeSet.has(t));
+      } else {
+        newTags = [...tags];
+      }
+      await new Promise<void>((resolve, reject) => {
+        db.links.update(
+          { _id: id, userId: req.userId },
+          { $set: { tags: newTags, updatedAt: new Date().toISOString() } },
+          {},
+          (err) => (err ? reject(err) : resolve())
+        );
+      });
+      count++;
+    }
+    res.json({ success: true, message: `已更新 ${count} 条链接的标签`, data: { count } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -512,6 +592,55 @@ export async function addAccount(req: AuthRequest, res: Response): Promise<void>
     });
 
     res.status(201).json({ success: true, message: "账号已添加", data: { _id: entry._id } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+// 编辑链接下的指定关联账号
+export async function updateAccount(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { username, email, password, notes } = req.body;
+    if (!password || !String(password).trim()) {
+      res.status(400).json({ success: false, error: "账号密码不能为空" });
+      return;
+    }
+
+    const link: Link | null = await new Promise((resolve, reject) => {
+      db.links.findOne({ _id: req.params.id, userId: req.userId }, (err, doc) => {
+        if (err) reject(err);
+        else resolve(doc as Link | null);
+      });
+    });
+    if (!link) {
+      res.status(404).json({ success: false, error: "Link not found" });
+      return;
+    }
+
+    const accounts = link.accounts || [];
+    const idx = accounts.findIndex((a) => a._id === req.params.accountId);
+    if (idx === -1) {
+      res.status(404).json({ success: false, error: "账号不存在" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const updated = { ...accounts[idx], password };
+    if (username !== undefined) updated.username = username;
+    if (email !== undefined) updated.email = email;
+    if (notes !== undefined) updated.notes = notes;
+    accounts[idx] = updated;
+
+    await new Promise<void>((resolve, reject) => {
+      db.links.update(
+        { _id: link._id },
+        { $set: { accounts, passwordUpdatedAt: now, updatedAt: now } },
+        {},
+        (err) => (err ? reject(err) : resolve())
+      );
+    });
+
+    res.json({ success: true, message: "账号已更新" });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

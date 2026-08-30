@@ -90,12 +90,24 @@ export const linkApi = {
   addAccount: (id: string, data: LinkAccountInput) =>
     api.post<ApiResponse<{ _id: string }>>(`/links/${id}/accounts`, data).then((r) => r.data),
 
+  // 编辑链接下的指定关联账号
+  updateAccount: (id: string, accountId: string, data: LinkAccountInput) =>
+    api.put<ApiResponse>(`/links/${id}/accounts/${accountId}`, data).then((r) => r.data),
+
   // 删除链接下的指定关联账号
   removeAccount: (id: string, accountId: string) =>
     api.delete<ApiResponse>(`/links/${id}/accounts/${accountId}`).then((r) => r.data),
 
   countWithAccount: () =>
     api.get<ApiResponse<{ count: number }>>("/links/account-count").then((r) => r.data),
+
+  // 按 URL 精确搜索已有链接 (添加时去重提示)
+  searchByUrl: (url: string) =>
+    api.get<ApiResponse<Link[]>>("/links/search-by-url", { params: { url } }).then((r) => r.data),
+
+  // 批量设置标签
+  batchUpdateTags: (ids: string[], tags: string[], mode?: "set" | "add" | "remove") =>
+    api.put<ApiResponse<{ count: number }>>("/links/batch-tags", { ids, tags, mode }).then((r) => r.data),
 };
 
 // Tags

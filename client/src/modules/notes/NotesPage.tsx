@@ -494,7 +494,7 @@ const NotesPage: React.FC = () => {
 
   // ---- 渲染 ----
 
-  // 顶部工具栏: 数据清空/导出/导入 + 附件管理 (笔记/回收站切换已收进左侧面板)
+  // 顶部工具栏: 清空/导出/导入 + 附件管理 (笔记/回收站切换已收进左侧面板)
   const topBar = (
     <div
       style={{
@@ -507,10 +507,10 @@ const NotesPage: React.FC = () => {
     >
       <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
         <Popconfirm title="清空全部笔记与附件? 该操作不可恢复!" onConfirm={handleWipe}>
-          <Button type="text" danger icon={<ClearOutlined />}>数据清空</Button>
+          <Button type="text" danger icon={<ClearOutlined />}>清空</Button>
         </Popconfirm>
-        <Button type="text" icon={<ExportOutlined />} onClick={handleExport}>数据导出</Button>
-        <Button type="text" icon={<ImportOutlined />} onClick={() => importInputRef.current?.click()}>数据导入</Button>
+        <Button type="text" icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+        <Button type="text" icon={<ImportOutlined />} onClick={() => importInputRef.current?.click()}>导入</Button>
         <Button type="text" icon={<PaperClipOutlined />} onClick={() => setAttachManagerOpen(true)}>附件管理</Button>
         <input
           ref={importInputRef}

@@ -15,7 +15,7 @@
 
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
-| 链接管理 | 快速导入（粘贴 URL 自动抓取标题/描述/图标）、搜索、标签筛选、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成）、数据清空/导出/导入（JSON/CSV）、标签管理弹窗 | [LINKS.md](./LINKS.md) |
+| 链接管理 | 快速导入（粘贴 URL 自动抓取标题/描述/图标）、搜索、标签筛选、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、批量设标签、数据清空/导出/导入（JSON/CSV）、标签管理弹窗 | [LINKS.md](./LINKS.md) |
 | 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
 | 桌面版 | Electron 桌面版（NSIS 安装包 / Portable 单文件 / ZIP 免安装三种格式），内嵌后端，双击即用；最小化/关闭隐藏到系统托盘后台运行；太阳图标统一 | 本文 §9 |
@@ -309,7 +309,7 @@ nginx.conf：`/api` 反代到 `server:3000`，其余 SPA 回退。数据经命�
 
 | 依赖 | 用途 |
 | ---- | ---- |
-| express / cors / helmet / express-rate-limit | Web 框架与安全 |
+| express / cors / helmet / express-rate-limit / express-validator | Web 框架与安全 |
 | @seald-io/nedb | 嵌入式数据库 |
 | jsonwebtoken / bcryptjs | 认证与哈希 |
 | adm-zip | 笔记 zip 导入/导出 |

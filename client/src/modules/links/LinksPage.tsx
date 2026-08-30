@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Table, Button, Modal, Form, Input, Tag, Space, message, Popconfirm, Select, Typography, theme, Tooltip } from "antd";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Table, Button, Modal, Form, Input, Tag, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Radio } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
   ThunderboltOutlined, KeyOutlined, CopyOutlined, FolderOutlined, ExportOutlined,
   DownloadOutlined, UploadOutlined, TagsOutlined, SyncOutlined, StarOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import { linkApi, tagApi, customIconApi } from "../../services/api";
 import type { CustomIcon } from "../../services/api";
@@ -42,7 +43,18 @@ const LinksPage: React.FC = () => {
   const [viewLinkId, setViewLinkId] = useState<string | null>(null);
 
   const [addAccountOpen, setAddAccountOpen] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [addForm] = Form.useForm();
+
+  // 批量选择 + 批量设标签
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [batchTagOpen, setBatchTagOpen] = useState(false);
+  const [batchTagMode, setBatchTagMode] = useState<"set" | "add" | "remove">("set");
+  const [batchTagForm] = Form.useForm();
+
+  // URL 去重搜索
+  const [duplicateLinks, setDuplicateLinks] = useState<Link[]>([]);
+  const urlSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadLinks = async (p = page) => {
     setLoading(true);
@@ -81,6 +93,51 @@ const LinksPage: React.FC = () => {
   }, [searchParams]);
   useEffect(() => { loadLinks(); }, [page, search, activeTag]);
 
+  // URL 去重搜索: 输入停顿 400ms 后查询已有链接
+  const handleUrlChangeForSearch = useCallback((urlValue: string) => {
+    if (urlSearchTimer.current) clearTimeout(urlSearchTimer.current);
+    const trimmed = (urlValue || "").trim();
+    if (!trimmed) {
+      setDuplicateLinks([]);
+      return;
+    }
+    urlSearchTimer.current = setTimeout(async () => {
+      try {
+        const res = await linkApi.searchByUrl(trimmed);
+        // 编辑模式下排除自身
+        const results = editingLink
+          ? (res.data || []).filter((l) => l._id !== editingLink._id)
+          : (res.data || []);
+        setDuplicateLinks(results);
+      } catch {
+        setDuplicateLinks([]);
+      }
+    }, 400);
+  }, [editingLink]);
+
+  useEffect(() => {
+    return () => { if (urlSearchTimer.current) clearTimeout(urlSearchTimer.current); };
+  }, []);
+
+  // 批量设标签
+  const handleBatchTagSubmit = async () => {
+    try {
+      const values = await batchTagForm.validateFields();
+      const res = await linkApi.batchUpdateTags(
+        selectedRowKeys as string[],
+        values.tags || [],
+        batchTagMode
+      );
+      message.success(res.message || "标签已更新");
+      setBatchTagOpen(false);
+      batchTagForm.resetFields();
+      setSelectedRowKeys([]);
+      loadLinks();
+    } catch (err: any) {
+      if (err.response?.data?.error) message.error(err.response.data.error);
+    }
+  };
+
   const handleQuickImport = async () => {
     const url = quickUrl.trim();
     if (!url) return;
@@ -100,6 +157,7 @@ const LinksPage: React.FC = () => {
   const handleCreate = () => {
     setEditingLink(null);
     form.resetFields();
+    setDuplicateLinks([]);
     setModalOpen(true);
   };
 
@@ -114,6 +172,7 @@ const LinksPage: React.FC = () => {
       icon: record.icon,
       tags: record.tags,
     });
+    setDuplicateLinks([]);
     setModalOpen(true);
   };
 
@@ -164,6 +223,33 @@ const LinksPage: React.FC = () => {
     }
   };
 
+  const handleEditAccount = (acc: any) => {
+    setEditingAccountId(acc._id);
+    addForm.setFieldsValue({
+      username: acc.username || "",
+      email: acc.email || "",
+      password: acc.password || "",
+      notes: acc.notes || "",
+    });
+    setAddAccountOpen(true);
+  };
+
+  const handleEditAccountSubmit = async () => {
+    if (!viewLinkId || !editingAccountId) return;
+    try {
+      const values = await addForm.validateFields();
+      await linkApi.updateAccount(viewLinkId, editingAccountId, values);
+      message.success("账号已更新");
+      addForm.resetFields();
+      setAddAccountOpen(false);
+      setEditingAccountId(null);
+      await refreshSecrets();
+      loadLinks();
+    } catch (err: any) {
+      if (err.response?.data?.error) message.error(err.response.data.error);
+    }
+  };
+
   // 随机生成密码: 16位 a-zA-Z0-9, 首字符为大写字母; 可多次点击替换
   const genPassword = () => {
     const all = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -203,6 +289,7 @@ const LinksPage: React.FC = () => {
         message.success("链接已创建");
       }
       setModalOpen(false);
+      setDuplicateLinks([]);
       loadLinks();
     } catch (err: any) {
       if (err.response?.data?.error) message.error(err.response.data.error);
@@ -305,6 +392,7 @@ const LinksPage: React.FC = () => {
     {
       title: "链接", dataIndex: "url", key: "url", ellipsis: true,
       render: (url: string) => {
+        if (!url) return <Text type="secondary">—</Text>;
         if (isLocalFile(url)) {
           return (
             <span>
@@ -399,17 +487,22 @@ const LinksPage: React.FC = () => {
         </Space>
         <Space>
           <Popconfirm
-            title="数据清空"
+            title="清空"
             description="确定要清空所有链接数据吗？此操作不可恢复！"
             okText="确认清空"
             okButtonProps={{ danger: true }}
             onConfirm={handleClearAll}
           >
-            <Button danger icon={<DeleteOutlined />}>数据清空</Button>
+            <Button danger icon={<DeleteOutlined />}>清空</Button>
           </Popconfirm>
-          <Button icon={<DownloadOutlined />} loading={exportLoading} onClick={handleExport}>数据导出</Button>
-          <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>数据导入</Button>
+          <Button icon={<DownloadOutlined />} loading={exportLoading} onClick={handleExport}>导出</Button>
+          <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>导入</Button>
           <Button icon={<TagsOutlined />} onClick={() => setTagManagerOpen(true)}>标签管理</Button>
+          {selectedRowKeys.length > 0 && (
+            <Button icon={<TagsOutlined />} type="primary" ghost onClick={() => { setBatchTagMode("set"); batchTagForm.resetFields(); setBatchTagOpen(true); }}>
+              批量设标签 ({selectedRowKeys.length})
+            </Button>
+          )}
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             添加链接
           </Button>
@@ -441,24 +534,51 @@ const LinksPage: React.FC = () => {
         columns={columns}
         rowKey="_id"
         loading={loading}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+        }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage }}
       />
+
+      {/* 批量设标签弹窗 */}
+      <Modal
+        title={`批量设置标签（已选 ${selectedRowKeys.length} 条）`}
+        open={batchTagOpen}
+        onOk={handleBatchTagSubmit}
+        onCancel={() => { setBatchTagOpen(false); batchTagForm.resetFields(); }}
+        okText="确定"
+        cancelText="取消"
+      >
+        <Form form={batchTagForm} layout="vertical">
+          <Form.Item label="操作方式">
+            <Radio.Group value={batchTagMode} onChange={(e) => setBatchTagMode(e.target.value)}>
+              <Radio value="set">覆盖标签</Radio>
+              <Radio value="add">追加标签</Radio>
+              <Radio value="remove">移除标签</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <Form.Item name="tags" label="标签" rules={[{ required: true, message: "请输入或选择标签" }]}>
+            <Select mode="tags" placeholder="输入或选择标签" options={tags.map((t) => ({ label: t.name, value: t.name }))} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Add/Edit Link Modal */}
       <Modal
         title={editingLink ? "编辑链接" : "添加链接"}
         open={modalOpen}
         onOk={handleSubmit}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => { setModalOpen(false); setDuplicateLinks([]); }}
         width={560}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="title" label="标题">
             <Input placeholder="留空则自动从URL生成" />
           </Form.Item>
-          <Form.Item name="url" label="链接地址" rules={[{ required: true, message: "请输入链接地址" }, {
+          <Form.Item name="url" label="链接地址" rules={[{
             validator: (_, value) => {
-              if (!value) return Promise.resolve();
+              if (!value) return Promise.resolve(); // URL 可为空
               // Accept: http(s)://, ftp://, file://, local paths (C:\, /), UNC paths (\\)
               if (/^(https?|ftp|file):\/\//i.test(value)) return Promise.resolve();
               if (/^[A-Za-z]:[\\/]/.test(value)) return Promise.resolve();
@@ -468,8 +588,26 @@ const LinksPage: React.FC = () => {
               return Promise.reject("请输入有效的网址或本地文件路径");
             }
           }]}>
-            <Input placeholder="https://... 或 C:\Users\... 或 \\server\share" />
+            <Input
+              placeholder="https://... 或 C:\Users\... 或 \\server\share（可留空）"
+              onChange={(e) => handleUrlChangeForSearch(e.target.value)}
+            />
           </Form.Item>
+          {/* URL 去重提示 */}
+          {duplicateLinks.length > 0 && (
+            <div style={{ marginBottom: 16, padding: "8px 12px", background: token.colorWarningBg, borderRadius: 6, border: `1px solid ${token.colorWarningBorder}` }}>
+              <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                <Text type="warning"><WarningOutlined /> 发现 {duplicateLinks.length} 条相同地址的已有链接：</Text>
+                {duplicateLinks.slice(0, 5).map((dl) => (
+                  <Text key={dl._id} style={{ fontSize: 12 }}>
+                    • {dl.title || dl.url || "(无标题)"}
+                    {dl.tags?.length > 0 && <span style={{ marginLeft: 4 }}>{dl.tags.map((t) => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>)}</span>}
+                  </Text>
+                ))}
+                {duplicateLinks.length > 5 && <Text type="secondary" style={{ fontSize: 12 }}>...还有 {duplicateLinks.length - 5} 条</Text>}
+              </Space>
+            </div>
+          )}
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={2} />
           </Form.Item>
@@ -500,7 +638,7 @@ const LinksPage: React.FC = () => {
       <Modal
         title="账号详情"
         open={viewModalOpen}
-        onCancel={() => { setViewModalOpen(false); setSecrets(null); setViewLinkId(null); setAddAccountOpen(false); }}
+        onCancel={() => { setViewModalOpen(false); setSecrets(null); setViewLinkId(null); setAddAccountOpen(false); setEditingAccountId(null); addForm.resetFields(); }}
         footer={null}
         width={800}
       >
@@ -544,11 +682,14 @@ const LinksPage: React.FC = () => {
                   render: (v: string | null) => v ? <Text style={{ maxWidth: 120 }} ellipsis>{v}</Text> : <Text type="secondary">—</Text>,
                 },
                 {
-                  title: "操作", key: "action", width: 60, align: "center" as const,
+                  title: "操作", key: "action", width: 80, align: "center" as const,
                   render: (_: any, acc: any) => (
-                    <Popconfirm title="确定删除该账号？" onConfirm={() => handleRemoveAccount(acc._id)}>
-                      <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
+                    <Space size={0}>
+                      <Button size="small" type="text" icon={<EditOutlined />} onClick={() => handleEditAccount(acc)} title="编辑" />
+                      <Popconfirm title="确定删除该账号？" onConfirm={() => handleRemoveAccount(acc._id)}>
+                        <Button size="small" type="text" danger icon={<DeleteOutlined />} title="删除" />
+                      </Popconfirm>
+                    </Space>
                   ),
                 },
               ]}
@@ -556,6 +697,9 @@ const LinksPage: React.FC = () => {
 
             {addAccountOpen ? (
               <div style={{ border: `1px dashed ${token.colorBorder}`, borderRadius: 6, padding: 12 }}>
+                <Text strong style={{ marginBottom: 8, display: "block" }}>
+                  {editingAccountId ? "编辑账号" : "添加关联账号"}
+                </Text>
                 <Form form={addForm} layout="vertical">
                   <Form.Item name="username" label="用户名">
                     <Input />
@@ -575,13 +719,15 @@ const LinksPage: React.FC = () => {
                     <Input.TextArea rows={2} />
                   </Form.Item>
                   <Space>
-                    <Button type="primary" onClick={handleAddAccountSubmit}>保存</Button>
-                    <Button onClick={() => { setAddAccountOpen(false); addForm.resetFields(); }}>取消</Button>
+                    <Button type="primary" onClick={editingAccountId ? handleEditAccountSubmit : handleAddAccountSubmit}>
+                      保存
+                    </Button>
+                    <Button onClick={() => { setAddAccountOpen(false); setEditingAccountId(null); addForm.resetFields(); }}>取消</Button>
                   </Space>
                 </Form>
               </div>
             ) : (
-              <Button type="dashed" block icon={<PlusOutlined />} onClick={() => setAddAccountOpen(true)}>
+              <Button type="dashed" block icon={<PlusOutlined />} onClick={() => { setEditingAccountId(null); addForm.resetFields(); setAddAccountOpen(true); }}>
                 添加关联账号
               </Button>
             )}

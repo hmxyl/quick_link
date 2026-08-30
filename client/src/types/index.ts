@@ -7,7 +7,7 @@ export interface User {
 
 export interface Link {
   _id: string;
-  url: string;
+  url: string; // 可为空字符串
   title: string;
   description?: string;
   icon?: string;
@@ -93,7 +93,7 @@ export interface LinkAccountInput {
 }
 
 export interface CreateLinkRequest {
-  url: string;
+  url?: string;
   title?: string;
   description?: string;
   icon?: string;
