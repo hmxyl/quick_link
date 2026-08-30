@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+server/prod_modules/
+desktop/release/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data files (NeDB / 笔记文件树 / 附件)
+user_data/
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+
+# Misc
+*.tsbuildinfo
+.cache/
+
+user_data/
+
+# Screenshots and temp files
+*.png
+tmp-nsis/
+verification_screenshots/

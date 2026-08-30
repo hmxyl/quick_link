@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy server files
+COPY server/package.json server/tsconfig.json ./server/
+RUN cd server && npm install
+
+COPY server/src ./server/src
+
+# Build TypeScript
+RUN cd server && npm run build
+
+# Create data directory
+RUN mkdir -p /app/user_data
+
+ENV NODE_ENV=production
+ENV DATA_DIR=/app/user_data
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["node", "server/dist/app.js"]

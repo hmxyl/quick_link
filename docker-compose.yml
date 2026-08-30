@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: quicklink-server
+    volumes:
+      - app_data:/app/user_data
+    environment:
+      - DATA_DIR=/app/user_data
+      - JWT_SECRET=${JWT_SECRET}
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    container_name: quicklink-client
+    ports:
+      - "5173:80"
+    depends_on:
+      - server
+
+volumes:
+  app_data:

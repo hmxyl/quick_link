@@ -1,0 +1,79 @@
+{
+  "name": "quicklink-desktop",
+  "productName": "QuickLink",
+  "version": "1.0.0",
+  "description": "QuickLink 链接收藏工具 桌面版",
+  "main": "main.js",
+  "author": "QuickLink",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "png-to-ico": "^3.0.2"
+  },
+  "build": {
+    "appId": "com.quicklink.desktop",
+    "productName": "QuickLink",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "../server/dist",
+        "to": "server/dist"
+      },
+      {
+        "from": "../server/prod_modules",
+        "to": "server/node_modules"
+      },
+      {
+        "from": "../server/package.json",
+        "to": "server/package.json"
+      },
+      {
+        "from": "../client/dist",
+        "to": "public"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "QuickLink",
+      "artifactName": "QuickLink-Setup-${version}.${ext}",
+      "include": "build/uninstall-backup.nsh"
+    }
+  }
+}

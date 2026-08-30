@@ -1,0 +1,1 @@
+Build and architecture documentation for QuickLink, a React + Node.js link and password vault application backed by MongoDB with AES-256-GCM encryption.

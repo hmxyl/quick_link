@@ -1,0 +1,1 @@
+Local development requires running `docker-compose up -d mongodb`, executing `npx migrate-mongo up` inside `server/` to apply initial schema, then starting both `npm run dev` servers (backend on port 3000, frontend on port 5173). Environment variables are copied from `.env.example` and must include `MONGODB_URI`, `JWT_SECRET`, and `ENCRYPTION_SALT`.

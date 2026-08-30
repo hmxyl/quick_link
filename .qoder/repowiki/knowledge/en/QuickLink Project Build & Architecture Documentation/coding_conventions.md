@@ -1,0 +1,4 @@
+- Migration scripts follow a timestamp-prefixed naming convention (`YYYYMMDDHHMMSS-description.js`) and expose paired `up`/`down` functions for forward and rollback operations.
+- Sensitive fields (account username, email, password, notes, TOTP secret) are stored encrypted with AES-256-GCM using an IV and auth tag, never persisted in plaintext.
+- User passwords are hashed with bcrypt rather than stored directly, while a separate master key derived via PBKDF2 encrypts credential payloads.
+- API endpoints are organized by resource domain under `/api/{auth|links|accounts|tags}` with consistent CRUD verbs and a uniform query parameter style for pagination, filtering, sorting, and full-text search.

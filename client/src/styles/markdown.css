@@ -1,0 +1,178 @@
+/* Markdown 预览样式 */
+.ql-markdown {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #24292f;
+  word-wrap: break-word;
+}
+
+.ql-markdown h1,
+.ql-markdown h2,
+.ql-markdown h3,
+.ql-markdown h4,
+.ql-markdown h5,
+.ql-markdown h6 {
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.ql-markdown h1 { font-size: 1.8em; border-bottom: 1px solid #eaecef; padding-bottom: 0.2em; }
+.ql-markdown h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.2em; }
+.ql-markdown h3 { font-size: 1.25em; }
+
+.ql-markdown p { margin: 0.6em 0; }
+
+.ql-markdown ul,
+.ql-markdown ol {
+  padding-left: 1.6em;
+  margin: 0.6em 0;
+}
+
+.ql-markdown blockquote {
+  margin: 0.6em 0;
+  padding: 0.2em 1em;
+  color: #57606a;
+  border-left: 4px solid #d0d7de;
+  background: #f6f8fa;
+}
+
+.ql-markdown code {
+  padding: 0.15em 0.4em;
+  font-size: 0.9em;
+  font-family: Consolas, Menlo, monospace;
+  background: rgba(175, 184, 193, 0.2);
+  border-radius: 4px;
+}
+
+.ql-markdown pre {
+  padding: 12px 16px;
+  overflow: auto;
+  background: #f6f8fa;
+  border-radius: 6px;
+}
+
+.ql-markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.ql-markdown table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  width: auto;
+}
+
+.ql-markdown th,
+.ql-markdown td {
+  border: 1px solid #d0d7de;
+  padding: 6px 12px;
+}
+
+.ql-markdown th { background: #f6f8fa; }
+
+.ql-markdown a { color: #1677ff; text-decoration: none; }
+.ql-markdown a:hover { text-decoration: underline; }
+
+.ql-markdown img { max-width: 100%; }
+
+.ql-markdown hr {
+  border: none;
+  border-top: 1px solid #eaecef;
+  margin: 1em 0;
+}
+
+/* 所见即所得编辑器 (Milkdown Crepe) 容器: 撑满可用空间 */
+.ql-milkdown-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ql-milkdown-root .milkdown {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.ql-milkdown-root .milkdown .editor {
+  flex: 1;
+  padding: 16px 24px;
+  font-size: 14px;
+  line-height: 1.7;
+  outline: none;
+}
+
+/* 编辑器内链接与预览一致: 主题蓝 (选择器需比 Crepe 主题的 .milkdown .ProseMirror a 更高特异性, 否则被后加载的主题覆盖) */
+.ql-milkdown-root .milkdown .ProseMirror a,
+.ql-milkdown-root .milkdown .editor a {
+  color: #1677ff;
+}
+
+/* ---------- 深色模式覆盖 (html 由 App 设置 data-theme="dark") ---------- */
+
+html[data-theme="dark"] .ql-markdown {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+html[data-theme="dark"] .ql-markdown h1,
+html[data-theme="dark"] .ql-markdown h2 {
+  border-bottom-color: #303030;
+}
+
+html[data-theme="dark"] .ql-markdown blockquote {
+  color: rgba(255, 255, 255, 0.55);
+  border-left-color: #424242;
+  background: #1f1f1f;
+}
+
+html[data-theme="dark"] .ql-markdown pre {
+  background: #1f1f1f;
+}
+
+html[data-theme="dark"] .ql-markdown th,
+html[data-theme="dark"] .ql-markdown td {
+  border-color: #424242;
+}
+
+html[data-theme="dark"] .ql-markdown th {
+  background: #1f1f1f;
+}
+
+html[data-theme="dark"] .ql-markdown hr {
+  border-top-color: #303030;
+}
+
+html[data-theme="dark"] .ql-milkdown-root {
+  background: #141414;
+  border-color: #303030;
+}
+
+/* Milkdown Crepe 编辑器深色变量 (对应官方 frame-dark 主题, 背景对齐 antd colorBgContainer) */
+html[data-theme="dark"] .ql-milkdown-root .milkdown {
+  --crepe-color-background: #141414;
+  --crepe-color-on-background: #e6e6e6;
+  --crepe-color-surface: #1f1f1f;
+  --crepe-color-surface-low: #262626;
+  --crepe-color-on-surface: #d1d1d1;
+  --crepe-color-on-surface-variant: #a9a9a9;
+  --crepe-color-outline: #757575;
+  --crepe-color-primary: #b5b5b5;
+  --crepe-color-secondary: #4d4d4d;
+  --crepe-color-on-secondary: #d6d6d6;
+  --crepe-color-inverse: #e5e5e5;
+  --crepe-color-on-inverse: #2a2a2a;
+  --crepe-color-inline-code: #ff6666;
+  --crepe-color-error: #ff6666;
+  --crepe-color-hover: #232323;
+  --crepe-color-selected: #2f2f2f;
+  --crepe-color-inline-area: #2b2b2b;
+}
