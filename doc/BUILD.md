@@ -1,6 +1,6 @@
 # QuickLink — 链接收藏工具 构建文档（总览）
 
-> 本文档体系为项目构建、架构与功能的唯一权威说明，与代码保持同步。总览（本文）+ 三个业务模块文档：
+> 本文档体系为项目构建、架构与功能的唯一权威说明，与代码保持同步。总览（本文）+ 四个业务模块文档：
 >
 > | 文档 | 内容 |
 > | ---- | ---- |
@@ -8,6 +8,7 @@
 > | [LINKS.md](./LINKS.md) | **链接管理**：链接/标签/关联账号凭据的数据模型、API、业务规则与前端交互 |
 > | [NOTES.md](./NOTES.md) | **笔记管理**：文件树存储、排序、附件、zip 导入导出的数据模型、API 与前端交互 |
 > | [USER.md](./USER.md) | **用户信息管理**：认证、设置与凭据记忆的模型、API 与前端交互 |
+> | [API.md](./API.md) | **接口管理**：环境配置、集合树、HTTP 请求发送、历史记录、导出导入的数据模型、API 与前端交互 |
 
 ## 1. 项目概述
 
@@ -18,6 +19,7 @@
 | 链接管理 | 快速导入（粘贴 URL 自动抓取标题/描述/图标，URL 可为空）、搜索、标签筛选、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、批量设标签、批量删除、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗、复制并用系统浏览器打开 | [LINKS.md](./LINKS.md) |
 | 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
+| 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth）、响应查看（状态码/耗时/Body/Headers）、请求历史记录、集合导出/导入、拷贝为 cURL | [API.md](./API.md) |
 | 桌面版 | Electron 桌面版（NSIS 安装包 / Portable 单文件 / ZIP 免安装三种格式），内嵌后端，双击即用；最小化/关闭隐藏到系统托盘后台运行；太阳图标统一 | 本文 §9 |
 | 数据存储 | 零外部依赖：NeDB 嵌入式 .db 文件 + 笔记文件树，全部统一存于 `user_data/` 目录（桌面版安装时可指定位置，默认用户目录下的 `.quick_link`），便于整体备份/迁移 | 本文 §4 |
 | 通用体验 | 全中文界面（Ant Design zhCN）、外观主题（跟随系统/浅色/深色）、侧栏收起记忆、记住密码/自动登录、开机自启（桌面版） | 本文 §8/§9 |
@@ -44,17 +46,18 @@
 
 ## 3. 项目目录结构
 
-> 前后端代码均按业务模块（链接管理 `links` / 笔记管理 `notes` / 用户信息管理 `user`）组织，模块内聚控制器（服务端）或页面与组件（前端）。
+> 前后端代码均按业务模块（链接管理 `links` / 笔记管理 `notes` / 用户信息管理 `user` / 接口管理 `api`）组织，模块内聚控制器（服务端）或页面与组件（前端）。
 
 ```
 quick_link/
-├── doc/                        # 文档: BUILD.md 总览 + LINKS/NOTES/USER 模块文档
+├── doc/                        # 文档: BUILD.md 总览 + LINKS/NOTES/USER/API 模块文档
 ├── client/                     # 前端
 │   ├── src/
 │   │   ├── modules/            # 业务模块 (页面+组件同层)
 │   │   │   ├── links/          # 链接管理: LinksPage / LinkIcon / TagManager
 │   │   │   ├── notes/          # 笔记管理: NotesPage / NoteViewer / MilkdownEditor / AttachmentManager / imageSize
-│   │   │   └── user/           # 用户信息管理: LoginPage / RegisterPage / SettingsModal
+│   │   │   ├── user/           # 用户信息管理: LoginPage / RegisterPage / SettingsModal
+│   │   │   └── api/            # 接口管理: ApiPage / ApiSidebar / RequestBuilder / ResponseViewer / EnvironmentModal
 │   │   ├── layout/             # AppLayout 侧栏+顶栏 (收起记忆, 用户下拉仅退出登录)
 │   │   ├── services/           # api.ts (axios 封装) / settings.ts (本地设置与凭据记忆)
 │   │   ├── stores/authStore.ts # Zustand 认证态; themeStore.ts # 外观主题 (跟随系统/浅/深)
@@ -69,6 +72,7 @@ quick_link/
 │   │   ├── modules/            # 业务模块 (控制器+路由同层)
 │   │   │   ├── links/          # 链接管理: linkController / tagController / customIconController(自定义图标库) + routes.ts / tags.routes.ts / accounts.routes.ts / customIcons.routes.ts
 │   │   │   ├── notes/          # noteController / attachmentController + routes.ts
+│   │   │   ├── api/            # environmentController / collectionController / historyController / proxyController + routes.ts
 │   │   │   └── user/           # authController + routes.ts
 │   │   ├── config/             # env.ts (DATA_DIR 解析) / database.ts (NeDB+索引)
 │   │   ├── middleware/         # auth.ts (JWT) / errorHandler.ts
@@ -81,7 +85,7 @@ quick_link/
 ├── user_data/                  # 全部用户数据 (运行时生成, gitignore)
 │   ├── note/<userId>/          # 笔记文件树 (文件夹=目录, 文档=.md, 回收站=.trash)
 │   ├── attachment/             # 笔记附件文件体 (uuid 文件名)
-│   └── *.db                    # users/links/tags/attachments/note_orders/migrations
+│   └── *.db                    # users/links/tags/attachments/note_orders/migrations/api_environments/api_collections/api_history
 ├── desktop/                    # Electron 桌面壳
 │   ├── main.js                 # 主进程: 内嵌 Express + 托盘 + 自启 IPC + 数据目录解析/恢复/迁移
 │   ├── preload.js              # contextBridge 暴露开机自启 + 系统浏览器打开 API
@@ -110,7 +114,7 @@ quick_link/
 user_data/
 ├── note/<userId>/      # 文件夹=目录, 文档=.md (UTF-8), 回收站=根下隐藏目录 .trash/
 ├── attachment/         # 附件文件体 (uuid + 原扩展名)
-├── users.db  links.db  accounts.db  tags.db  attachments.db  note_orders.db  custom_icons.db  migrations.db
+├── users.db  links.db  accounts.db  tags.db  attachments.db  note_orders.db  custom_icons.db  api_environments.db  api_collections.db  api_history.db  migrations.db
 ```
 
 ### 4.2 集合与归属模块
@@ -121,6 +125,7 @@ user_data/
 | links / tags / accounts（兼容保留） | 链接管理 | [LINKS.md §2](./LINKS.md) |
 | attachments / note_orders | 笔记管理 | [NOTES.md §2](./NOTES.md) |
 | custom_icons | 链接管理（自定义图标库） | [LINKS.md §3.2.1](./LINKS.md) |
+| api_environments / api_collections / api_history | 接口管理 | [API.md §2](./API.md) |
 | migrations | 通用（自动管理）：`{ _id, version, name, appliedAt }` | 本文 §5 |
 
 ### 4.3 索引初始化
@@ -135,7 +140,10 @@ tags.ensureIndex({ fieldName: "userId" });   tags.ensureIndex({ fieldName: "name
 attachments.ensureIndex({ fieldName: "userId" }); attachments.ensureIndex({ fieldName: "noteId" });
 noteOrders.ensureIndex({ fieldName: "userId" }); noteOrders.ensureIndex({ fieldName: "parentId" });
 customIcons.ensureIndex({ fieldName: "userId" }); customIcons.ensureIndex({ fieldName: "url", unique: true });
-export const db = { users, links, accounts, tags, attachments, noteOrders, migrations, customIcons };
+apiEnvironments.ensureIndex({ fieldName: "userId" });
+apiCollections.ensureIndex({ fieldName: "userId" }); apiCollections.ensureIndex({ fieldName: "parentId" });
+apiHistory.ensureIndex({ fieldName: "userId" });
+export const db = { users, links, accounts, tags, attachments, noteOrders, migrations, customIcons, apiEnvironments, apiCollections, apiHistory };
 ```
 
 ---
@@ -179,6 +187,7 @@ npm run migrate:status    # 查看状态
 | /api/auth | 用户信息管理 | [USER.md §4](./USER.md) |
 | /api/links、/api/tags、/api/accounts（兼容保留）、/api/custom-icons | 链接管理 | [LINKS.md §3](./LINKS.md) |
 | /api/notes（含 /attachments） | 笔记管理 | [NOTES.md §3](./NOTES.md) |
+| /api/api-manager | 接口管理（环境/集合/历史/代理发送） | [API.md §3](./API.md) |
 | /api/health | 通用健康检查 | — |
 
 ---
@@ -205,6 +214,7 @@ npm run migrate:status    # 查看状态
 /       → /links            # 重定向
 /links  /links?tag=X        # 链接管理 (标签管理弹窗内置)
 /notes                      # 笔记管理
+/api                        # 接口管理
 /tags   → /links            # 旧路由兼容
 ```
 
@@ -348,7 +358,7 @@ electron ^31 / electron-builder ^24 / png-to-ico（devDependencies）。服务�
 
 ## 13. 设计决策记录（通用/桌面）
 
-> 模块相关设计决策已随文档拆分移入各模块文档：链接管理 [LINKS.md §6](./LINKS.md)、笔记管理 [NOTES.md §5](./NOTES.md)、用户信息管理 [USER.md §6](./USER.md)。
+> 模块相关设计决策已随文档拆分移入各模块文档：链接管理 [LINKS.md §6](./LINKS.md)、笔记管理 [NOTES.md §5](./NOTES.md)、用户信息管理 [USER.md §6](./USER.md)、接口管理 [API.md §6](./API.md)。
 
 ### 13.1 桌面版选型与数据目录演进
 Electron 进程内 `require()` 启动编译后 Express（依赖纯 JS 免重建，共享环境变量注入）。数据目录演进：早期 `%APPDATA%` → 安装路径下 `user_data/`（指针默认值） → 现为**安装时可指定、默认用户目录下 `.quick_link`**（指针文件 `%APPDATA%\QuickLink\data_dir.txt` 记录选择，重装/升级沿用）。数据目录为空时按优先级自动恢复：卸载备份 `%APPDATA%\QuickLink\user_data` > 旧版 `%APPDATA%\data` > 早期包名目录 `quicklink-desktop\data` > 安装目录残留 `user_data`；重装更换目录时按 `pending_migration.txt` 提示把旧目录数据复制到新目录（仅复制不删除）。`secrets.json` 存 `%APPDATA%\QuickLink` 保证密钥跨安装稳定。卸载前经 `customUnInit` 钩子把安装目录内 `user_data` 备份至 `%APPDATA%\QuickLink`（曾因卸载默认清理 `$INSTDIR` 导致重装丢数据，2026-08 修复）。

@@ -17,6 +17,9 @@ const attachments = new Datastore({ filename: path.join(env.DATA_DIR, "attachmen
 const noteOrders = new Datastore({ filename: path.join(env.DATA_DIR, "note_orders.db"), autoload: true });
 const migrations = new Datastore({ filename: path.join(env.DATA_DIR, "migrations.db"), autoload: true });
 const customIcons = new Datastore({ filename: path.join(env.DATA_DIR, "custom_icons.db"), autoload: true });
+const apiEnvironments = new Datastore({ filename: path.join(env.DATA_DIR, "api_environments.db"), autoload: true });
+const apiCollections = new Datastore({ filename: path.join(env.DATA_DIR, "api_collections.db"), autoload: true });
+const apiHistory = new Datastore({ filename: path.join(env.DATA_DIR, "api_history.db"), autoload: true });
 
 // Setup indexes
 users.ensureIndex({ fieldName: "username", unique: true });
@@ -41,5 +44,12 @@ noteOrders.ensureIndex({ fieldName: "parentId" });
 customIcons.ensureIndex({ fieldName: "userId" });
 customIcons.ensureIndex({ fieldName: "url", unique: true });
 
-export const db = { users, links, accounts, tags, attachments, noteOrders, migrations, customIcons };
+apiEnvironments.ensureIndex({ fieldName: "userId" });
+
+apiCollections.ensureIndex({ fieldName: "userId" });
+apiCollections.ensureIndex({ fieldName: "parentId" });
+
+apiHistory.ensureIndex({ fieldName: "userId" });
+
+export const db = { users, links, accounts, tags, attachments, noteOrders, migrations, customIcons, apiEnvironments, apiCollections, apiHistory };
 export type DB = typeof db;

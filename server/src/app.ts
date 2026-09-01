@@ -13,6 +13,7 @@ import accountRoutes from "./modules/links/accounts.routes";
 import tagRoutes from "./modules/links/tags.routes";
 import customIconRoutes from "./modules/links/customIcons.routes";
 import noteRoutes from "./modules/notes/routes";
+import apiRoutes from "./modules/api/routes";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/accounts", accountRoutes);
 app.use("/api/tags", tagRoutes);
 app.use("/api/custom-icons", customIconRoutes);
 app.use("/api/notes", noteRoutes);
+app.use("/api/api-manager", apiRoutes);
 
 // Serve built frontend (production / desktop packaged mode)
 const staticDir = process.env.STATIC_DIR;

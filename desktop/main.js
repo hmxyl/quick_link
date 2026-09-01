@@ -246,6 +246,7 @@ function createWindow(port) {
   });
 
   mainWindow.loadURL(`http://127.0.0.1:${port}/`);
+  mainWindow.maximize();
 
   // Open external links in the system browser instead of new Electron windows
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

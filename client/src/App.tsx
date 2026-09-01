@@ -9,6 +9,7 @@ import LoginPage from "./modules/user/LoginPage";
 import RegisterPage from "./modules/user/RegisterPage";
 import LinksPage from "./modules/links/LinksPage";
 import NotesPage from "./modules/notes/NotesPage";
+import ApiPage from "./modules/api/ApiPage";
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -60,6 +61,7 @@ const App: React.FC = () => {
             <Route index element={<Navigate to="/links" replace />} />
             <Route path="links" element={<LinksPage />} />
             <Route path="notes" element={<NotesPage />} />
+            <Route path="api" element={<ApiPage />} />
             <Route path="tags" element={<Navigate to="/links" replace />} />
           </Route>
         </Routes>

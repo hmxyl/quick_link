@@ -8,6 +8,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   FileMarkdownOutlined,
+  ApiOutlined,
 } from "@ant-design/icons";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
@@ -45,6 +46,7 @@ const AppLayout: React.FC = () => {
   const menuItems = [
     { key: "/links", icon: <LinkOutlined />, label: "链接管理" },
     { key: "/notes", icon: <FileMarkdownOutlined />, label: "笔记管理" },
+    { key: "/api", icon: <ApiOutlined />, label: "接口管理" },
   ];
 
   const userMenu = {

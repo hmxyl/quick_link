@@ -100,3 +100,80 @@ export interface CreateLinkRequest {
   tags?: string[];
   accounts?: LinkAccountInput[];
 }
+
+// ─── API Manager Types ───────────────────────────────────────────────────────
+
+export interface EnvVariable {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
+export interface ApiEnvironment {
+  _id: string;
+  userId: string;
+  name: string;
+  variables: EnvVariable[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KeyValueEntry {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
+export interface ApiCollectionItem {
+  _id: string;
+  userId: string;
+  parentId: string | null;
+  type: "collection" | "folder" | "request";
+  name: string;
+  sortOrder: number;
+  method?: string;
+  url?: string;
+  headers?: KeyValueEntry[];
+  queryParams?: KeyValueEntry[];
+  cookies?: KeyValueEntry[];
+  bodyType?: "none" | "json" | "form-data" | "x-www-form-urlencoded" | "raw" | "binary";
+  body?: string;
+  authType?: "none" | "bearer" | "basic";
+  authConfig?: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiHistory {
+  _id: string;
+  userId: string;
+  method: string;
+  url: string;
+  statusCode: number;
+  duration: number;
+  requestSnapshot: Record<string, any>;
+  responseSnapshot: Record<string, any>;
+  createdAt: string;
+}
+
+export interface SendRequestPayload {
+  method: string;
+  url: string;
+  headers?: KeyValueEntry[];
+  queryParams?: KeyValueEntry[];
+  cookies?: KeyValueEntry[];
+  bodyType?: string;
+  body?: string;
+  authType?: string;
+  authConfig?: Record<string, string>;
+}
+
+export interface SendRequestResult {
+  statusCode: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+  duration: number;
+  size: number;
+}

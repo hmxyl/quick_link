@@ -134,3 +134,59 @@ export interface ListQuery {
   tag?: string;
   favorite?: string;
 }
+
+// ─── API Manager Types ───────────────────────────────────────────────────────
+
+export interface EnvVariable {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
+export interface ApiEnvironment {
+  _id: string;
+  userId: string;
+  name: string;
+  variables: EnvVariable[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KeyValueEntry {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
+export interface ApiCollectionItem {
+  _id: string;
+  userId: string;
+  parentId: string | null;
+  type: "collection" | "folder" | "request";
+  name: string;
+  sortOrder: number;
+  method?: string;
+  url?: string;
+  headers?: KeyValueEntry[];
+  queryParams?: KeyValueEntry[];
+  cookies?: KeyValueEntry[];
+  bodyType?: "none" | "json" | "form-data" | "x-www-form-urlencoded" | "raw" | "binary";
+  body?: string;
+  authType?: "none" | "bearer" | "basic";
+  authConfig?: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiHistory {
+  _id: string;
+  userId: string;
+  method: string;
+  url: string;
+  statusCode: number;
+  duration: number;
+  requestSnapshot: Record<string, any>;
+  responseSnapshot: Record<string, any>;
+  createdAt: string;
+}

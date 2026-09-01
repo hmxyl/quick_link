@@ -11,6 +11,11 @@ import type {
   Attachment,
   CreateLinkRequest,
   LinkAccountInput,
+  ApiEnvironment,
+  ApiCollectionItem,
+  ApiHistory,
+  SendRequestPayload,
+  SendRequestResult,
 } from "../types";
 
 const api = axios.create({
@@ -217,3 +222,46 @@ export const attachmentApi = {
 };
 
 export default api;
+
+// API Manager
+export const apiManagerApi = {
+  // 环境
+  listEnvironments: () =>
+    api.get<ApiResponse<ApiEnvironment[]>>("/api-manager/environments").then((r) => r.data),
+  createEnvironment: (data: { name: string; variables?: { key: string; value: string; enabled: boolean }[] }) =>
+    api.post<ApiResponse<ApiEnvironment>>("/api-manager/environments", data).then((r) => r.data),
+  updateEnvironment: (id: string, data: Partial<ApiEnvironment>) =>
+    api.put<ApiResponse<ApiEnvironment>>(`/api-manager/environments/${id}`, data).then((r) => r.data),
+  removeEnvironment: (id: string) =>
+    api.delete(`/api-manager/environments/${id}`).then((r) => r.data),
+  activateEnvironment: (id: string) =>
+    api.post(`/api-manager/environments/${id}/activate`).then((r) => r.data),
+
+  // 集合/请求
+  listCollections: () =>
+    api.get<ApiResponse<ApiCollectionItem[]>>("/api-manager/collections").then((r) => r.data),
+  createCollectionItem: (data: Partial<ApiCollectionItem>) =>
+    api.post<ApiResponse<ApiCollectionItem>>("/api-manager/collections", data).then((r) => r.data),
+  updateCollectionItem: (id: string, data: Partial<ApiCollectionItem>) =>
+    api.put<ApiResponse<ApiCollectionItem>>(`/api-manager/collections/${id}`, data).then((r) => r.data),
+  removeCollectionItem: (id: string) =>
+    api.delete(`/api-manager/collections/${id}`).then((r) => r.data),
+  exportCollection: (id: string) =>
+    api.post<ApiResponse>("/api-manager/collections/export", { id }).then((r) => r.data),
+  importCollection: (data: any) =>
+    api.post<ApiResponse>("/api-manager/collections/import", { data }).then((r) => r.data),
+
+  // 历史
+  listHistory: (params?: { page?: number; limit?: number }) =>
+    api.get<ApiResponse<ApiHistory[]> & { total: number }>("/api-manager/history", { params }).then((r) => r.data),
+  recordHistory: (data: any) =>
+    api.post<ApiResponse<ApiHistory>>("/api-manager/history", data).then((r) => r.data),
+  removeHistory: (id: string) =>
+    api.delete(`/api-manager/history/${id}`).then((r) => r.data),
+  clearHistory: () =>
+    api.delete<ApiResponse<{ count: number }>>("/api-manager/history").then((r) => r.data),
+
+  // 发送请求
+  send: (data: SendRequestPayload) =>
+    api.post<ApiResponse<SendRequestResult>>("/api-manager/send", data).then((r) => r.data),
+};

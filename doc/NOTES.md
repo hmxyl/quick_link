@@ -1,6 +1,6 @@
 # QuickLink — 笔记管理模块
 
-> 模块文档之一。总览见 [BUILD.md](./BUILD.md)，其余模块：[链接管理](./LINKS.md) / [用户信息管理](./USER.md)。
+> 模块文档之一。总览见 [BUILD.md](./BUILD.md)，其余模块：[链接管理](./LINKS.md) / [用户信息管理](./USER.md) / [接口管理](./API.md)。
 
 ## 1. 功能概览
 
