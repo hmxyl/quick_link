@@ -80,8 +80,8 @@ export const linkApi = {
   exportJson: () =>
     api.get("/links/export", { params: { format: "json" }, responseType: "blob" }).then((r) => r.data as Blob),
 
-  batchImport: (links: CreateLinkRequest[]) =>
-    api.post<ApiResponse<{ count: number }>>("/links/batch", { links }).then((r) => r.data),
+  batchImport: (links: CreateLinkRequest[], customIcons?: any[], tags?: any[]) =>
+    api.post<ApiResponse<{ count: number }>>("/links/batch", { links, customIcons, tags }).then((r) => r.data),
 
   getSecrets: (id: string) =>
     api.get<ApiResponse<AccountSecrets>>(`/links/${id}/secrets`).then((r) => r.data),
@@ -108,6 +108,10 @@ export const linkApi = {
   // 批量设置标签
   batchUpdateTags: (ids: string[], tags: string[], mode?: "set" | "add" | "remove") =>
     api.put<ApiResponse<{ count: number }>>("/links/batch-tags", { ids, tags, mode }).then((r) => r.data),
+
+  // 批量删除
+  batchRemove: (ids: string[]) =>
+    api.post<ApiResponse<{ count: number }>>("/links/batch-delete", { ids }).then((r) => r.data),
 };
 
 // Tags

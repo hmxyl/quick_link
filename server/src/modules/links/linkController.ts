@@ -466,25 +466,110 @@ export async function clearAll(req: AuthRequest, res: Response): Promise<void> {
   }
 }
 
+// Batch delete links by IDs
+export async function batchRemove(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: "请选择至少一个链接" });
+      return;
+    }
+    const removed: number = await new Promise((resolve, reject) => {
+      db.links.remove({ _id: { $in: ids }, userId: req.userId }, { multi: true }, (err, numRemoved) => {
+        if (err) reject(err);
+        else resolve(numRemoved);
+      });
+    });
+    res.json({ success: true, message: `已删除 ${removed} 条链接`, data: { count: removed } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 export async function batchImport(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { links: importLinks } = req.body;
+    const { links: importLinks, customIcons: importIcons, tags: importTags } = req.body;
     if (!Array.isArray(importLinks) || importLinks.length === 0) {
       res.status(400).json({ success: false, error: "Links array is required" });
       return;
     }
 
     const now = new Date().toISOString();
+
+    // 导入自定义图标 (按 URL 去重, 已存在则跳过)
+    let iconCount = 0;
+    if (Array.isArray(importIcons) && importIcons.length > 0) {
+      const existingIcons: any[] = await new Promise((resolve, reject) => {
+        db.customIcons.find({ userId: req.userId }).exec((err, docs) => {
+          if (err) reject(err);
+          else resolve(docs as any[]);
+        });
+      });
+      const existingUrls = new Set(existingIcons.map((c) => c.url));
+      const newIcons = importIcons
+        .filter((c: any) => c.url && /^https?:\/\//i.test(c.url) && !existingUrls.has(c.url))
+        .map((c: any) => ({
+          _id: uuidv4(),
+          userId: req.userId,
+          url: c.url,
+          label: c.label || undefined,
+          createdAt: now,
+        }));
+      if (newIcons.length > 0) {
+        await new Promise<void>((resolve, reject) => {
+          db.customIcons.insert(newIcons, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+        iconCount = newIcons.length;
+      }
+    }
+
+    // 导入标签 (按名称去重, 已存在则跳过)
+    let tagCount = 0;
+    if (Array.isArray(importTags) && importTags.length > 0) {
+      const existingTags: any[] = await new Promise((resolve, reject) => {
+        db.tags.find({ userId: req.userId }).exec((err, docs) => {
+          if (err) reject(err);
+          else resolve(docs as any[]);
+        });
+      });
+      const existingNames = new Set(existingTags.map((t) => t.name));
+      const newTags = importTags
+        .filter((t: any) => t.name && !existingNames.has(t.name))
+        .map((t: any) => ({
+          _id: uuidv4(),
+          userId: req.userId,
+          name: t.name,
+          color: t.color || undefined,
+          createdAt: now,
+        }));
+      if (newTags.length > 0) {
+        await new Promise<void>((resolve, reject) => {
+          db.tags.insert(newTags, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+        tagCount = newTags.length;
+      }
+    }
+
+    // 导入链接 (包含 icon 字段)
     const docs = importLinks.map((item: any) => ({
       _id: uuidv4(),
       userId: req.userId,
-      url: item.url,
-      title: item.title || item.url,
+      url: item.url || "",
+      title: item.title || item.url || "",
       description: item.description,
+      icon: item.icon || undefined,
       tags: item.tags || [],
-      isFavorite: false,
-      isArchived: false,
-      clickCount: 0,
+      isFavorite: item.isFavorite || false,
+      isArchived: item.isArchived || false,
+      clickCount: item.clickCount || 0,
+      hasAccount: false,
+      accounts: [],
       createdAt: now,
       updatedAt: now,
     }));
@@ -496,7 +581,10 @@ export async function batchImport(req: AuthRequest, res: Response): Promise<void
       });
     });
 
-    res.status(201).json({ success: true, message: `${inserted} links imported`, data: { count: inserted } });
+    const parts = [`${inserted} 条链接`];
+    if (iconCount > 0) parts.push(`${iconCount} 个图标`);
+    if (tagCount > 0) parts.push(`${tagCount} 个标签`);
+    res.status(201).json({ success: true, message: `已导入 ${parts.join("、")}`, data: { count: inserted, iconCount, tagCount } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -513,15 +601,46 @@ export async function exportLinks(req: AuthRequest, res: Response): Promise<void
     });
 
     if (format === "csv") {
-      const header = "URL,Title,Description,Tags\n";
+      const header = "URL,Title,Description,Tags,Icon\n";
       const rows = links
-        .map((l) => `"${l.url}","${l.title}","${l.description || ""}","${l.tags.join(";")}"`)
+        .map((l) => `"${l.url}","${l.title}","${l.description || ""}","${(l.tags || []).join(";")}","${l.icon || ""}"`)
         .join("\n");
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=links.csv");
       res.send(header + rows);
     } else {
-      res.json({ success: true, data: links });
+      // JSON 导出: 包含链接、标签、自定义图标
+      const [customIcons, tags] = await Promise.all([
+        new Promise<any[]>((resolve, reject) => {
+          db.customIcons.find({ userId: req.userId }).sort({ createdAt: -1 }).exec((err, docs) => {
+            if (err) reject(err);
+            else resolve(docs as any[]);
+          });
+        }),
+        new Promise<any[]>((resolve, reject) => {
+          db.tags.find({ userId: req.userId }).sort({ createdAt: -1 }).exec((err, docs) => {
+            if (err) reject(err);
+            else resolve(docs as any[]);
+          });
+        }),
+      ]);
+      // 链接数据去掉 userId 与 accounts (账号单独管理, 不随导出)
+      const safeLinks = links.map((l) => ({
+        url: l.url,
+        title: l.title,
+        description: l.description,
+        icon: l.icon,
+        tags: l.tags || [],
+        isFavorite: l.isFavorite,
+        isArchived: l.isArchived,
+        clickCount: l.clickCount,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
+      }));
+      // 图标/标签去 userId
+      const safeIcons = customIcons.map((c) => ({ url: c.url, label: c.label, createdAt: c.createdAt }));
+      const safeTags = tags.map((t) => ({ name: t.name, color: t.color, createdAt: t.createdAt }));
+      res.json({ success: true, data: safeLinks, customIcons: safeIcons, tags: safeTags });
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

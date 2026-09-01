@@ -482,7 +482,19 @@ const MilkdownEditor = forwardRef<MilkdownEditorHandle, Props>(({ defaultValue, 
     // 仅挂载一次: 切换笔记/模式时由父组件通过 key 重新挂载
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={rootRef} className="ql-milkdown-root" />;
+  return <div ref={rootRef} className="ql-milkdown-root" onClick={(e) => {
+    const target = (e.target as HTMLElement).closest?.("a");
+    if (!target) return;
+    const href = target.getAttribute("href");
+    if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
+      e.preventDefault();
+      if (window.quicklink?.openExternal) {
+        window.quicklink.openExternal(href);
+      } else {
+        window.open(href, "_blank", "noopener,noreferrer");
+      }
+    }
+  }} />;
 });
 
 export default MilkdownEditor;

@@ -15,7 +15,7 @@
 
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
-| 链接管理 | 快速导入（粘贴 URL 自动抓取标题/描述/图标）、搜索、标签筛选、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、批量设标签、数据清空/导出/导入（JSON/CSV）、标签管理弹窗 | [LINKS.md](./LINKS.md) |
+| 链接管理 | 快速导入（粘贴 URL 自动抓取标题/描述/图标，URL 可为空）、搜索、标签筛选、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、批量设标签、批量删除、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗、复制并用系统浏览器打开 | [LINKS.md](./LINKS.md) |
 | 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
 | 桌面版 | Electron 桌面版（NSIS 安装包 / Portable 单文件 / ZIP 免安装三种格式），内嵌后端，双击即用；最小化/关闭隐藏到系统托盘后台运行；太阳图标统一 | 本文 §9 |
@@ -84,7 +84,7 @@ quick_link/
 │   └── *.db                    # users/links/tags/attachments/note_orders/migrations
 ├── desktop/                    # Electron 桌面壳
 │   ├── main.js                 # 主进程: 内嵌 Express + 托盘 + 自启 IPC + 数据目录解析/恢复/迁移
-│   ├── preload.js              # contextBridge 暴露开机自启 API
+│   ├── preload.js              # contextBridge 暴露开机自启 + 系统浏览器打开 API
 │   ├── scripts/gen-icon.js     # icon.svg → icon.ico/icon.png (16/32/48/256)
 │   ├── build/                  # 生成产物 (icon.ico/icon.png, gitignore) + uninstall-backup.nsh (NSIS 钩子: 数据目录选择页/指针与迁移提示/卸载前备份)
 │   └── package.json            # electron-builder 配置 (nsis/portable/zip 三目标)
@@ -264,7 +264,7 @@ powershell -ExecutionPolicy Bypass -File build-desktop.ps1
 - 单实例锁：重复启动聚焦已有窗口；外链经系统浏览器打开。
 - 后台运行：最小化与关闭均隐藏到托盘；托盘菜单「退出 QuickLink」/系统关机（`before-quit` 置位）才真实销毁窗口。
 - 图标统一：矢量源 `client/public/icon.svg`；`gen-icon.js` 光栅化 16/32/48/256 并经 png-to-ico 生成 `build/icon.ico`（NSIS 仅接受 BMP 格式 ICO 条目）；electron-builder 用于 exe/安装包/快捷方式，另经 extraResources 分发 `resources/icon.ico` 供运行时托盘加载（app.asar 不含 build/ 目录）。
-- 开机自启：preload.js（contextBridge）暴露 `window.quicklink.getAutoLaunch/setAutoLaunch`，主进程 `app.setLoginItemSettings`。
+- 开机自启与外链打开：preload.js（contextBridge）暴露 `window.quicklink.getAutoLaunch/setAutoLaunch`（主进程 `app.setLoginItemSettings`）与 `openExternal`（主进程 `shell.openExternal`，供前端「复制并用系统浏览器打开」使用）。
 - 分发格式：未签名 exe 可能被 Windows 应用程序控制策略/SmartScreen 拦截，故同时提供 Portable 单文件与 ZIP 免安装格式（不经过安装器，双击/解压即用，见 §13.3）；安装向导能力（数据目录选择/卸载备份）仅 NSIS 格式具备。
 - helmet 关闭 CSP 以支持 Vite 产物内联资源。
 

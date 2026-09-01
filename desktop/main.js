@@ -280,6 +280,12 @@ ipcMain.handle("quicklink:set-auto-launch", (_event, enabled) => {
   app.setLoginItemSettings({ openAtLogin: !!enabled });
   return true;
 });
+ipcMain.handle("quicklink:open-external", (_event, url) => {
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+    shell.openExternal(url);
+  }
+  return true;
+});
 
 // Single instance: focus existing window instead of launching twice
 if (!app.requestSingleInstanceLock()) {

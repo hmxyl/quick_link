@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Input,
@@ -23,6 +23,7 @@ import {
   DownloadOutlined,
   DeleteOutlined,
   LinkOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import { marked, Renderer, type Tokens } from "marked";
 import type { Attachment, Note } from "../../types";
@@ -75,6 +76,71 @@ mdRenderer.image = ({ href, title, text }: Tokens.Image): string => {
   return `${out}>`;
 };
 
+// 标题渲染: 为每个标题生成唯一 ID (供大纲跳转)
+const headingIdCounts = new Map<string, number>();
+mdRenderer.heading = ({ text, depth }: Tokens.Heading): string => {
+  // 去除 HTML 标签后生成 slug
+  const raw = text.replace(/<[^>]*>/g, "").trim();
+  let slug = raw.toLowerCase().replace(/[^\w\u4e00-\u9fff]+/g, "-").replace(/^-+|-+$/g, "") || "heading";
+  const count = headingIdCounts.get(slug) || 0;
+  headingIdCounts.set(slug, count + 1);
+  const id = count > 0 ? `${slug}-${count}` : slug;
+  return `<h${depth} id="${id}">${text}</h${depth}>\n`;
+};
+
+// 大纲条目
+interface OutlineItem {
+  id: string;
+  text: string;
+  level: number;
+}
+
+// 从 markdown 文本提取大纲 (与渲染器使用相同的 slug 生成逻辑)
+function extractOutline(markdown: string): OutlineItem[] {
+  headingIdCounts.clear();
+  const items: OutlineItem[] = [];
+  const lines = markdown.split("\n");
+  let inCodeBlock = false;
+  for (const line of lines) {
+    if (/^ {0,3}(```|~~~)/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+    const m = line.match(/^(#{1,6})\s+(.+)$/);
+    if (!m) continue;
+    const level = m[1].length;
+    const raw = m[2].replace(/[*_`~\[\]]/g, "").trim();
+    let slug = raw.toLowerCase().replace(/[^\w\u4e00-\u9fff]+/g, "-").replace(/^-+|-+$/g, "") || "heading";
+    const count = headingIdCounts.get(slug) || 0;
+    headingIdCounts.set(slug, count + 1);
+    const id = count > 0 ? `${slug}-${count}` : slug;
+    items.push({ id, text: raw, level });
+  }
+  return items;
+}
+
+// 用系统默认浏览器打开链接 (桌面版走 Electron shell.openExternal, 网页版走 window.open)
+const openLinkInBrowser = (href: string) => {
+  if (!href || /^#/i.test(href) || href.startsWith("javascript:")) return;
+  if (window.quicklink?.openExternal) {
+    window.quicklink.openExternal(href);
+  } else {
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
+};
+
+// 预览区链接点击拦截: 冒泡到容器统一用系统浏览器打开
+const handlePreviewLinkClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const target = (e.target as HTMLElement).closest?.("a");
+  if (!target) return;
+  const href = target.getAttribute("href");
+  if (href) {
+    e.preventDefault();
+    openLinkInBrowser(href);
+  }
+};
+
 interface Props {
   note: Note;
   attachments: Attachment[];
@@ -90,6 +156,17 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<any>(null);
   const mdRef = useRef<MilkdownEditorHandle>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // 大纲侧边栏显示状态 (仅预览模式生效)
+  const [outlineOpen, setOutlineOpen] = useState(
+    () => localStorage.getItem("ql-note-outline-open") !== "0"
+  );
+  const toggleOutline = () => {
+    const next = !outlineOpen;
+    setOutlineOpen(next);
+    localStorage.setItem("ql-note-outline-open", next ? "1" : "0");
+  };
 
   // 编辑模式: wysiwyg=所见即所得 (类 Typora), split=左侧源码+右侧预览
   const [editMode, setEditMode] = useState<EditMode>(
@@ -212,9 +289,26 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
   }, [note.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const html = useMemo(() => {
+    headingIdCounts.clear();
     const src = editing ? draft : note.content || "";
     return marked.parse(src || "", { async: false, renderer: mdRenderer }) as string;
   }, [editing, draft, note.content]);
+
+  // 大纲数据: 仅在非编辑模式下计算
+  const outline = useMemo(() => {
+    if (editing) return [];
+    return extractOutline(note.content || "");
+  }, [editing, note.content]);
+
+  // 点击大纲项: 滚动预览区到对应标题
+  const scrollToHeading = useCallback((id: string) => {
+    const container = previewRef.current;
+    if (!container) return;
+    const el = container.querySelector(`#${CSS.escape(id)}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
 
   const dirty = editing && draft !== (note.content || "");
 
@@ -426,9 +520,20 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
               </Button>
             </>
           ) : (
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
-              编辑
-            </Button>
+            <>
+              <Button type="primary" icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                编辑
+              </Button>
+              {outline.length > 0 && (
+                <Tooltip title={outlineOpen ? "隐藏大纲" : "显示大纲"}>
+                  <Button
+                    icon={<UnorderedListOutlined />}
+                    onClick={toggleOutline}
+                    type={outlineOpen ? "default" : "text"}
+                  />
+                </Tooltip>
+              )}
+            </>
           )}
         </Space>
       </div>
@@ -531,18 +636,76 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
             <div
               style={{
                 flex: 1,
-                overflow: "auto",
+                display: "flex",
+                gap: 0,
                 border: `1px solid ${token.colorBorderSecondary}`,
                 borderRadius: 6,
-                padding: 16,
                 background: token.colorBgContainer,
+                overflow: "hidden",
               }}
             >
-              {editing || (note.content || "") ? (
-                <div className="ql-markdown" dangerouslySetInnerHTML={{ __html: html }} />
-              ) : (
-                <Text type="secondary">暂无内容, 点击「编辑」开始书写</Text>
+              {/* 大纲侧边栏: 仅非编辑模式且有标题时显示 */}
+              {!editing && outlineOpen && outline.length > 0 && (
+                <div
+                  style={{
+                    width: 200,
+                    flexShrink: 0,
+                    borderRight: `1px solid ${token.colorBorderSecondary}`,
+                    overflow: "auto",
+                    padding: "12px 0",
+                    background: token.colorFillQuaternary,
+                  }}
+                >
+                  <div style={{ padding: "0 12px 8px", fontWeight: 600, fontSize: 12, color: token.colorTextSecondary }}>
+                    大纲
+                  </div>
+                  {outline.map((item, idx) => (
+                    <div
+                      key={`${item.id}-${idx}`}
+                      onClick={() => scrollToHeading(item.id)}
+                      style={{
+                        padding: "4px 12px",
+                        paddingLeft: 12 + (item.level - 1) * 12,
+                        fontSize: 12,
+                        lineHeight: "22px",
+                        cursor: "pointer",
+                        color: item.level <= 2 ? token.colorText : token.colorTextSecondary,
+                        fontWeight: item.level <= 2 ? 500 : 400,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        borderRadius: 4,
+                        margin: "0 4px",
+                      }}
+                      title={item.text}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLDivElement).style.background = token.colorFillContent;
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLDivElement).style.background = "transparent";
+                      }}
+                    >
+                      {item.text}
+                    </div>
+                  ))}
+                </div>
               )}
+              {/* 预览内容 */}
+              <div
+                ref={previewRef}
+                style={{
+                  flex: 1,
+                  overflow: "auto",
+                  padding: 16,
+                  minWidth: 0,
+                }}
+              >
+                {editing || (note.content || "") ? (
+                  <div className="ql-markdown" dangerouslySetInnerHTML={{ __html: html }} onClick={handlePreviewLinkClick} />
+                ) : (
+                  <Text type="secondary">暂无内容, 点击「编辑」开始书写</Text>
+                )}
+              </div>
             </div>
           </>
         )}

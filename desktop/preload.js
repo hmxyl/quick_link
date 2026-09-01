@@ -4,4 +4,5 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("quicklink", {
   getAutoLaunch: () => ipcRenderer.invoke("quicklink:get-auto-launch"),
   setAutoLaunch: (enabled) => ipcRenderer.invoke("quicklink:set-auto-launch", !!enabled),
+  openExternal: (url) => ipcRenderer.invoke("quicklink:open-external", url),
 });

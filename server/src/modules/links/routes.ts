@@ -11,6 +11,7 @@ router.get("/export", linkController.exportLinks);
 router.get("/account-count", linkController.countWithAccount);
 router.get("/search-by-url", linkController.searchByUrl);
 router.put("/batch-tags", linkController.batchUpdateTags);
+router.post("/batch-delete", linkController.batchRemove);
 router.get("/:id", linkController.getById);
 router.get("/:id/secrets", linkController.getSecrets);
 router.post("/:id/accounts", linkController.addAccount);

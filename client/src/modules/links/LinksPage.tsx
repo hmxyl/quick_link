@@ -119,6 +119,18 @@ const LinksPage: React.FC = () => {
     return () => { if (urlSearchTimer.current) clearTimeout(urlSearchTimer.current); };
   }, []);
 
+  // 批量删除
+  const handleBatchDelete = async () => {
+    try {
+      const res = await linkApi.batchRemove(selectedRowKeys as string[]);
+      message.success(res.message || `已删除 ${res.data?.count ?? selectedRowKeys.length} 条链接`);
+      setSelectedRowKeys([]);
+      loadLinks();
+    } catch {
+      message.error("批量删除失败");
+    }
+  };
+
   // 批量设标签
   const handleBatchTagSubmit = async () => {
     try {
@@ -303,8 +315,12 @@ const LinksPage: React.FC = () => {
 
   const handleCopyAndOpen = (url: string) => {
     navigator.clipboard.writeText(url);
-    window.open(url, "_blank");
-    message.success("地址已复制，并在新标签页打开");
+    if (window.quicklink?.openExternal) {
+      window.quicklink.openExternal(url);
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    message.success("地址已复制，并用系统浏览器打开");
   };
 
   const isLocalFile = (url: string) => url.startsWith("file://");
@@ -342,15 +358,21 @@ const LinksPage: React.FC = () => {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      // Accept both export format {data:[...]} and plain array / {links:[...]}
-      const items: any[] = Array.isArray(parsed) ? parsed : parsed.data || parsed.links || [];
+      // Accept both export format {data:[...], customIcons:[...], tags:[...]} and plain array / {links:[...]}
+      const items: any[] = Array.isArray(parsed)
+        ? parsed
+        : parsed.data || parsed.links || [];
+      const importIcons: any[] = Array.isArray(parsed.customIcons) ? parsed.customIcons : [];
+      const importTags: any[] = Array.isArray(parsed.tags) ? parsed.tags : [];
       if (items.length === 0) {
         message.warning("导入文件中没有链接数据");
         return;
       }
-      const res = await linkApi.batchImport(items);
-      message.success(`成功导入 ${res.data?.count ?? items.length} 条链接`);
+      const res = await linkApi.batchImport(items, importIcons, importTags);
+      message.success(res.message || `成功导入 ${res.data?.count ?? items.length} 条链接`);
       loadLinks(1);
+      loadTags();
+      loadCustomIcons();
     } catch {
       message.error("导入失败：文件格式无效");
     } finally {
@@ -422,13 +444,14 @@ const LinksPage: React.FC = () => {
         const isInLibrary = hasUrlIcon && customIcons.some((c) => c.url === record.icon);
         return (
           <Space>
-            {isLocalFile(record.url) && (
-              <Button
-                size="small"
-                icon={<ExportOutlined />}
-                onClick={() => handleCopyAndOpen(record.url)}
-                title="复制地址并在新标签页打开"
-              />
+            {record.url && (
+              <Tooltip title="复制并用系统浏览器打开">
+                <Button
+                  size="small"
+                  icon={<ExportOutlined />}
+                  onClick={() => handleCopyAndOpen(record.url)}
+                />
+              </Tooltip>
             )}
             <Tooltip title="账号管理">
               <Button size="small" icon={<KeyOutlined />} onClick={() => handleViewSecrets(record._id)} />
@@ -499,9 +522,21 @@ const LinksPage: React.FC = () => {
           <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>导入</Button>
           <Button icon={<TagsOutlined />} onClick={() => setTagManagerOpen(true)}>标签管理</Button>
           {selectedRowKeys.length > 0 && (
-            <Button icon={<TagsOutlined />} type="primary" ghost onClick={() => { setBatchTagMode("set"); batchTagForm.resetFields(); setBatchTagOpen(true); }}>
-              批量设标签 ({selectedRowKeys.length})
-            </Button>
+            <>
+              <Popconfirm
+                title={`确定删除选中的 ${selectedRowKeys.length} 条链接？`}
+                onConfirm={handleBatchDelete}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button danger icon={<DeleteOutlined />}>
+                  批量删除 ({selectedRowKeys.length})
+                </Button>
+              </Popconfirm>
+              <Button icon={<TagsOutlined />} type="primary" ghost onClick={() => { setBatchTagMode("set"); batchTagForm.resetFields(); setBatchTagOpen(true); }}>
+                批量设标签 ({selectedRowKeys.length})
+              </Button>
+            </>
           )}
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             添加链接

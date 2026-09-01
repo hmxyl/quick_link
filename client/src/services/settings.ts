@@ -79,6 +79,7 @@ export function clearCredentials(): void {
 export interface QuickLinkBridge {
   getAutoLaunch: () => Promise<boolean>;
   setAutoLaunch: (enabled: boolean) => Promise<void>;
+  openExternal: (url: string) => Promise<void>;
 }
 
 declare global {
