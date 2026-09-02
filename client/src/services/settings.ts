@@ -12,6 +12,8 @@ export interface AppSettings {
   autoLogin: boolean;
   /** 外观主题, 默认跟随系统 */
   themeMode: ThemeMode;
+  /** 全局字体 (CSS font-family 字符串, 空串表示使用默认字体) */
+  fontFamily: string;
 }
 
 export interface SavedCredentials {
@@ -27,6 +29,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   rememberPassword: false,
   autoLogin: false,
   themeMode: "system",
+  fontFamily: "",
 };
 
 export function getSettings(): AppSettings {
@@ -40,6 +43,8 @@ export function getSettings(): AppSettings {
 export function saveSettings(patch: Partial<AppSettings>): AppSettings {
   const next = { ...getSettings(), ...patch };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+  // 同标签页内通过自定义事件通知字体等设置变化
+  window.dispatchEvent(new CustomEvent("quicklink:settings-changed", { detail: next }));
   return next;
 }
 

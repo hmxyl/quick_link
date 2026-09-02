@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Dropdown,
@@ -119,16 +119,12 @@ const NotesPage: React.FC = () => {
     }
   }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 点击其他位置关闭右键菜单
+  // 点击其他位置关闭右键菜单 (用 mousedown 而非 contextmenu, 避免与 onRightClick 时序冲突)
   useEffect(() => {
     if (!ctxMenu) return;
     const close = () => setCtxMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("contextmenu", close);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("contextmenu", close);
-    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
   }, [ctxMenu]);
 
   // ---- 创建 / 删除 ----
@@ -253,22 +249,42 @@ const NotesPage: React.FC = () => {
     const node = ctxMenu.node;
     const items: any[] = [];
     if (!node || node.type === "folder") {
-      items.push({ key: "newNote", icon: <FileAddOutlined />, label: "新建文档", onClick: () => createItem("note", node?._id || null) });
+      items.push({ key: "newNote", icon: <FileAddOutlined />, label: "新建文档" });
     }
     if (!node || node.type === "folder") {
-      items.push({ key: "newFolder", icon: <FolderAddOutlined />, label: node ? "新建子层文件夹" : "新建文件夹", onClick: () => createItem("folder", node?._id || null) });
+      items.push({ key: "newFolder", icon: <FolderAddOutlined />, label: node ? "新建子层文件夹" : "新建文件夹" });
     }
     if (node?.type === "folder") {
-      items.push({ key: "newFile", icon: <FileAddOutlined />, label: "新建子层文件", onClick: () => createItem("note", node._id) });
+      items.push({ key: "newSubFile", icon: <FileAddOutlined />, label: "新建子层文件" });
+    }
+    // 右键笔记节点时, 也允许新建同级文件
+    if (node?.type === "note") {
+      items.push({ key: "newSiblingFile", icon: <FileAddOutlined />, label: "新建同级文件" });
     }
     if (node) {
       items.push({ type: "divider" });
-      items.push({ key: "rename", icon: <FileMarkdownOutlined />, label: "重命名", onClick: () => rename(node) });
-      items.push({ key: "move", icon: <SendOutlined />, label: "移动到", onClick: () => openMoveModal(node) });
-      items.push({ key: "delete", icon: <DeleteOutlined />, label: "删除", danger: true, onClick: () => softDelete(node) });
+      items.push({ key: "rename", icon: <FileMarkdownOutlined />, label: "重命名" });
+      items.push({ key: "move", icon: <SendOutlined />, label: "移动到" });
+      items.push({ key: "delete", icon: <DeleteOutlined />, label: "删除", danger: true });
     }
     return items;
   }, [ctxMenu, notes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCtxMenuClick = useCallback(({ key }: { key: string }) => {
+    if (!ctxMenu) return;
+    const node = ctxMenu.node;
+    setCtxMenu(null);
+    switch (key) {
+      case "newNote": createItem("note", node?._id || null); break;
+      case "newFolder": createItem("folder", node?._id || null); break;
+      case "newSubFile": createItem("note", node?._id || null); break;
+      // 右键笔记时新建同级文件: 使用当前笔记的 parentId
+      case "newSiblingFile": createItem("note", node?.parentId || null); break;
+      case "rename": if (node) rename(node); break;
+      case "move": if (node) openMoveModal(node); break;
+      case "delete": if (node) softDelete(node); break;
+    }
+  }, [ctxMenu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- 树构建 ----
   // 同级顺序以服务端返回为准 (自定义排序优先, 无自定义时文件夹在前+中文名)
@@ -305,11 +321,6 @@ const NotesPage: React.FC = () => {
           key: n._id,
           title: (
             <span
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCtxMenu({ x: e.clientX, y: e.clientY, node: n });
-              }}
               style={
                 highlightIds.includes(n._id)
                   ? { background: "#fffbe6", outline: "1px solid #ffe58f", borderRadius: 3, padding: "0 2px" }
@@ -610,17 +621,26 @@ const NotesPage: React.FC = () => {
                 expandedKeys={expandedKeys}
                 onExpand={(keys) => setExpandedKeys(keys)}
                 selectedKeys={selectedId ? [selectedId] : []}
-                onSelect={(keys, info) => {
+                onSelect={(keys) => {
                   const key = String(keys[0] ?? "");
                   if (!key) return;
                   setSelectedId(key); // 文件夹也高亮选中 (仅文档打开右侧预览)
                   setHighlightIds([]); // 用户手动导航后清除附件归属高亮
-                  if (!info.node.isLeaf) {
-                    // 点击文件夹: 同时切换展开
+                }}
+                onClick={(_e, node) => {
+                  if (!node.isLeaf) {
+                    const key = String(node.key);
                     setExpandedKeys((prev) =>
                       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
                     );
                   }
+                }}
+                onRightClick={({ node, event }) => {
+                  event.preventDefault();
+                  event.stopPropagation(); // 阻止冒泡到父级 div 的 onContextMenu (否则会覆盖 ctxMenu 为 node: null)
+                  const nd = node as unknown as { key: React.Key };
+                  const n = active.find((x) => x._id === String(nd.key));
+                  if (n) setCtxMenu({ x: event.clientX, y: event.clientY, node: n });
                 }}
               />
             ) : (
@@ -711,8 +731,9 @@ const NotesPage: React.FC = () => {
             background: token.colorBgElevated,
           }}
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          <Menu items={ctxItems} style={{ border: "none", minWidth: 160 }} />
+          <Menu items={ctxItems} onClick={handleCtxMenuClick} style={{ border: "none", minWidth: 160 }} />
         </div>
       )}
 

@@ -1,16 +1,17 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Tree,
   Tabs,
   Button,
-  Dropdown,
   Input,
   Typography,
   Empty,
   Tag,
   List,
   Popconfirm,
+  Menu,
   message,
+  theme,
 } from "antd";
 import {
   PlusOutlined,
@@ -76,6 +77,10 @@ const ApiSidebar: React.FC<Props> = ({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; item: ApiCollectionItem } | null>(null);
+  const treeRef = useRef<any>(null);
+  const { token } = theme.useToken();
 
   // 构建扁平 -> 树形结构
   const treeData = useMemo(() => {
@@ -126,6 +131,68 @@ const ApiSidebar: React.FC<Props> = ({
 
     return cleanTree(roots);
   }, [collections]);
+
+  // 按渲染顺序扁平的可见节点 (供键盘上下左右导航)
+  const flatList = useMemo(() => {
+    const out: ApiCollectionItem[] = [];
+    const walk = (nodes: TreeNodeData[]) => {
+      for (const n of nodes) {
+        out.push(n.item);
+        if (n.children && expandedKeys.includes(n.key)) walk(n.children);
+      }
+    };
+    walk(treeData);
+    return out;
+  }, [treeData, expandedKeys]);
+
+  // 键盘上下左右: 选中移动 / 文件夹收起展开 / Enter 加载请求
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+      if (ctxMenu || renaming) return;
+      if (!flatList.length) return;
+      e.preventDefault();
+      const idx = flatList.findIndex(n => n._id === focusedId);
+      const cur = idx >= 0 ? flatList[idx] : null;
+      const moveTo = (n?: ApiCollectionItem) => {
+        if (!n) return;
+        setFocusedId(n._id);
+        treeRef.current?.scrollTo?.({ key: n._id });
+      };
+      if (e.key === "ArrowDown") return moveTo(idx >= 0 && idx < flatList.length - 1 ? flatList[idx + 1] : flatList[0]);
+      if (e.key === "ArrowUp") return moveTo(idx > 0 ? flatList[idx - 1] : flatList[flatList.length - 1]);
+      if (e.key === "Enter") {
+        if (cur?.type === "request") onSelectRequest(cur);
+        return;
+      }
+      if (!cur) return moveTo(flatList[0]);
+      if (e.key === "ArrowRight") {
+        if (cur.type !== "request" && !expandedKeys.includes(cur._id)) {
+          setExpandedKeys(prev => [...prev, cur._id]);
+        } else if (cur.type !== "request") {
+          moveTo(flatList[idx + 1]);
+        }
+      } else {
+        if (cur.type !== "request" && expandedKeys.includes(cur._id)) {
+          setExpandedKeys(prev => prev.filter(k => k !== cur._id));
+        } else if (cur.parentId) {
+          moveTo(flatList.find(n => n._id === cur.parentId));
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [flatList, focusedId, expandedKeys, ctxMenu, renaming, onSelectRequest]);
+
+  // 点击其他位置关闭右键菜单 (用 mousedown 而非 contextmenu, 避免与 onRightClick 时序冲突)
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [ctxMenu]);
 
   // 右键菜单
   const getContextMenu = useCallback((item: ApiCollectionItem) => {
@@ -210,21 +277,16 @@ const ApiSidebar: React.FC<Props> = ({
     }
 
     return (
-      <Dropdown
-        menu={{ items: getContextMenu(item) }}
-        trigger={["contextMenu"]}
+      <span
+        style={{ cursor: "pointer" }}
+        onClick={() => {
+          if (item.type === "request") {
+            onSelectRequest(item);
+          }
+        }}
       >
-        <span
-          style={{ cursor: "pointer" }}
-          onClick={() => {
-            if (item.type === "request") {
-              onSelectRequest(item);
-            }
-          }}
-        >
-          {nodeData.title}
-        </span>
-      </Dropdown>
+        {nodeData.title}
+      </span>
     );
   }, [renaming, renameValue, getContextMenu, onSelectRequest, onRename]);
 
@@ -262,13 +324,29 @@ const ApiSidebar: React.FC<Props> = ({
                   <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无集合" />
                 ) : (
                   <Tree
+                    ref={treeRef}
                     treeData={treeData}
                     expandedKeys={expandedKeys}
                     onExpand={keys => setExpandedKeys(keys)}
-                    selectedKeys={currentId ? [currentId] : []}
+                    selectedKeys={focusedId ? [focusedId] : currentId ? [currentId] : []}
                     titleRender={titleRender as any}
                     blockNode
                     showIcon
+                    onSelect={(keys, info) => {
+                      const key = String(keys[0] ?? "");
+                      if (!key) return;
+                      const nd = info.node as unknown as TreeNodeData;
+                      if (nd.item.type !== "request") {
+                        setExpandedKeys(prev =>
+                          prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                        );
+                      }
+                    }}
+                    onRightClick={({ node, event }) => {
+                      event.preventDefault();
+                      const nd = node as unknown as TreeNodeData;
+                      setCtxMenu({ x: event.clientX, y: event.clientY, item: nd.item });
+                    }}
                   />
                 )}
               </div>
@@ -323,6 +401,25 @@ const ApiSidebar: React.FC<Props> = ({
           },
         ]}
       />
+
+      {/* 右键菜单 */}
+      {ctxMenu && (
+        <div
+          style={{
+            position: "fixed",
+            left: ctxMenu.x,
+            top: ctxMenu.y,
+            zIndex: 1050,
+            boxShadow: token.boxShadowSecondary,
+            borderRadius: 6,
+            background: token.colorBgElevated,
+          }}
+          onClick={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          <Menu items={getContextMenu(ctxMenu.item)} style={{ border: "none", minWidth: 160 }} />
+        </div>
+      )}
     </div>
   );
 };

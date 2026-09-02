@@ -398,7 +398,6 @@ const ApiPage: React.FC = () => {
             authType={authType}
             authConfig={authConfig}
             envVars={getEnvVars()}
-            sending={sending}
             onMethodChange={setMethod}
             onUrlChange={setUrl}
             onHeadersChange={setHeaders}

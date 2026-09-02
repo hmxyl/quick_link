@@ -1,10 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Switch, Radio, message, Typography, theme } from "antd";
+import { Modal, Switch, Radio, Select, message, Typography, theme } from "antd";
 import { getSettings, saveSettings, isDesktop } from "../../services/settings";
 import type { AppSettings, ThemeMode } from "../../services/settings";
 import { useThemeStore } from "../../stores/themeStore";
 
 const { Text } = Typography;
+
+/** 预设字体选项 */
+const FONT_OPTIONS = [
+  { label: "IBM Plex Mono", value: "IBMPlexMono" },
+  { label: "Courier New", value: "'Courier New'" },
+  { label: "Consolas", value: "Consolas" },
+  { label: "Menlo", value: "Menlo" },
+  { label: "Monaco", value: "Monaco" },
+  { label: "系统默认", value: "system-ui" },
+  { label: "等宽字体", value: "monospace" },
+];
 
 interface Props {
   open: boolean;
@@ -111,6 +122,30 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
           </Text>
         </div>
         <Switch checked={settings.rememberPassword} onChange={handleRemember} />
+      </div>
+      <div style={rowStyle}>
+        <div>
+          <Text strong>字体</Text>
+          <br />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            全局字体，留空使用默认字体
+          </Text>
+        </div>
+        <Select
+          mode="tags"
+          tokenSeparators={[","]}
+          placeholder="默认字体"
+          value={settings.fontFamily ? settings.fontFamily.split(",").map((s) => s.trim()).filter(Boolean) : []}
+          onChange={(vals) => {
+            const fontFamily = vals.join(", ");
+            setSettings(saveSettings({ fontFamily }));
+          }}
+          options={FONT_OPTIONS}
+          style={{ width: 220 }}
+          maxTagCount="responsive"
+          allowClear
+          onClear={() => setSettings(saveSettings({ fontFamily: "" }))}
+        />
       </div>
       <div style={{ ...rowStyle, borderBottom: "none" }}>
         <div>

@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import { Button, Input, Select, Space, Switch, Tabs } from "antd";
-import { PlusOutlined, DeleteOutlined, SendOutlined, CopyOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
 import type { KeyValueEntry } from "../../types";
 
 const { TextArea } = Input;
@@ -18,7 +18,6 @@ interface Props {
   authType: string;
   authConfig: Record<string, string>;
   envVars: Record<string, string>;
-  sending: boolean;
   onMethodChange: (m: string) => void;
   onUrlChange: (u: string) => void;
   onHeadersChange: (h: KeyValueEntry[]) => void;
@@ -83,7 +82,7 @@ const KVEditor: React.FC<{
 
 const RequestBuilder: React.FC<Props> = ({
   method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig,
-  envVars, sending,
+  envVars,
   onMethodChange, onUrlChange, onHeadersChange, onQueryParamsChange, onCookiesChange,
   onBodyTypeChange, onBodyChange, onAuthTypeChange, onAuthConfigChange, onSend, onCopyCurl,
 }) => {
@@ -112,9 +111,6 @@ const RequestBuilder: React.FC<Props> = ({
           style={{ flex: 1 }}
           onPressEnter={onSend}
         />
-        <Button type="primary" icon={<SendOutlined />} loading={sending} onClick={onSend}>
-          Send
-        </Button>
         <Button icon={<CopyOutlined />} onClick={onCopyCurl}>
           cURL
         </Button>
@@ -168,6 +164,22 @@ const RequestBuilder: React.FC<Props> = ({
                         {t === "x-www-form-urlencoded" ? "form-urlenc" : t}
                       </Button>
                     ))}
+                    {bodyType === "json" && (
+                      <Button
+                        size="small"
+                        icon={<FormatPainterOutlined />}
+                        onClick={() => {
+                          try {
+                            const parsed = JSON.parse(body);
+                            onBodyChange(JSON.stringify(parsed, null, 2));
+                          } catch {
+                            // JSON 格式有误时不处理
+                          }
+                        }}
+                      >
+                        格式化
+                      </Button>
+                    )}
                   </Space>
                   {bodyType !== "none" && (
                     <TextArea
@@ -175,7 +187,7 @@ const RequestBuilder: React.FC<Props> = ({
                       onChange={e => onBodyChange(e.target.value)}
                       placeholder={bodyType === "json" ? '{\n  "key": "value"\n}' : "请求体内容..."}
                       rows={8}
-                      style={{ fontFamily: bodyType === "json" ? "monospace" : undefined }}
+                      style={{ fontFamily: bodyType === "json" ? "var(--ql-font-family, monospace)" : undefined }}
                     />
                   )}
                 </div>

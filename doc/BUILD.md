@@ -22,7 +22,7 @@
 | 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth）、响应查看（状态码/耗时/Body/Headers）、请求历史记录、集合导出/导入、拷贝为 cURL | [API.md](./API.md) |
 | 桌面版 | Electron 桌面版（NSIS 安装包 / Portable 单文件 / ZIP 免安装三种格式），内嵌后端，双击即用；最小化/关闭隐藏到系统托盘后台运行；太阳图标统一 | 本文 §9 |
 | 数据存储 | 零外部依赖：NeDB 嵌入式 .db 文件 + 笔记文件树，全部统一存于 `user_data/` 目录（桌面版安装时可指定位置，默认用户目录下的 `.quick_link`），便于整体备份/迁移 | 本文 §4 |
-| 通用体验 | 全中文界面（Ant Design zhCN）、外观主题（跟随系统/浅色/深色）、侧栏收起记忆、记住密码/自动登录、开机自启（桌面版） | 本文 §8/§9 |
+| 通用体验 | 全中文界面（Ant Design zhCN）、外观主题（跟随系统/浅色/深色）、全局字体选择、侧栏收起记忆、记住密码/自动登录、开机自启（桌面版） | 本文 §8/§9 |
 
 ---
 
@@ -222,6 +222,7 @@ npm run migrate:status    # 查看状态
 
 - 侧栏底部依次为：设置按钮、用户下拉（退出登录）、收起/展开按钮（`localStorage quicklink:siderCollapsed` 记忆）。
 - 外观主题：设置弹窗选 跟随系统/浅色/深色（默认跟随系统，`prefers-color-scheme` 变化实时切换）；App 据 `isDark` 切换 antd `darkAlgorithm` 并同步 `html[data-theme]`/`color-scheme`/body 背景；自定义样式（markdown 预览、Milkdown Crepe 变量）经 `html[data-theme="dark"]` 覆盖；业务组件一律用 `theme.useToken()` 取色，禁写死浅色值。
+- 全局字体：设置弹窗可选预设字体（IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体）或自定义输入；选中后写入 `AppSettings.fontFamily`（`localStorage quicklink:settings`），App 将其应用到 `document.body.style.fontFamily`、antd `ConfigProvider` token 及 CSS 变量 `--ql-font-family`（供子组件如接口管理代码区继承）；设置页修改后通过自定义事件 `quicklink:settings-changed` 在同标签页内实时同步，无需刷新。
 - 请求拦截：自动附加 `Authorization: Bearer`；开发环境 Vite proxy `/api` → `localhost:3000`；服务端错误文案统一简体中文。
 
 ### 8.3 状态管理

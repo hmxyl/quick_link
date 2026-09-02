@@ -4,6 +4,7 @@ import { ConfigProvider, Spin, theme } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useAuthStore } from "./stores/authStore";
 import { useThemeStore } from "./stores/themeStore";
+import { getSettings, type AppSettings } from "./services/settings";
 import AppLayout from "./layout/AppLayout";
 import LoginPage from "./modules/user/LoginPage";
 import RegisterPage from "./modules/user/RegisterPage";
@@ -27,18 +28,37 @@ const App: React.FC = () => {
 
   // 外观主题: 跟随系统/浅色/深色; data-theme 驱动自定义 CSS (markdown.css) 的深色覆盖
   const isDark = useThemeStore((s) => s.isDark);
+  // 全局字体: 从 localStorage 读取, 设置页修改后通过 storage 事件实时同步
+  const [fontFamily, setFontFamily] = useState(() => getSettings().fontFamily);
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
     document.documentElement.style.colorScheme = isDark ? "dark" : "light";
     document.body.style.backgroundColor = isDark ? "#000" : "#f0f2f5";
   }, [isDark]);
+  const resolvedFont = fontFamily
+    ? `${fontFamily}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+    : "";
+  useEffect(() => {
+    document.body.style.fontFamily = resolvedFont;
+    // CSS 变量供子组件 (如接口管理代码区) 继承用户字体
+    document.documentElement.style.setProperty("--ql-font-family", resolvedFont);
+  }, [resolvedFont]);
+  // 监听设置页修改字体: 通过自定义事件实时同步
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const s = (e as CustomEvent<AppSettings>).detail;
+      setFontFamily(s.fontFamily);
+    };
+    window.addEventListener("quicklink:settings-changed", handler);
+    return () => window.removeEventListener("quicklink:settings-changed", handler);
+  }, []);
 
   return (
     <ConfigProvider
       locale={zhCN}
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: { colorPrimary: "#1677ff" },
+        token: { colorPrimary: "#1677ff", ...(fontFamily ? { fontFamily: `${fontFamily}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` } : {}) },
       }}
     >
       {!ready ? (

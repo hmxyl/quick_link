@@ -1,6 +1,6 @@
-import React from "react";
-import { Empty, Spin, Tabs, Tag, Typography } from "antd";
-import { ClockCircleOutlined, DatabaseOutlined } from "@ant-design/icons";
+import React, { useState } from "react";
+import { Button, Empty, Spin, Tabs, Tag, theme, Typography } from "antd";
+import { ClockCircleOutlined, DatabaseOutlined, FormatPainterOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
@@ -42,6 +42,9 @@ const formatBody = (body: string): string => {
 };
 
 const ResponseViewer: React.FC<Props> = ({ response, loading }) => {
+  const [formatted, setFormatted] = useState(true);
+  const { token } = theme.useToken();
+
   if (loading) {
     return (
       <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 200 }}>
@@ -58,13 +61,14 @@ const ResponseViewer: React.FC<Props> = ({ response, loading }) => {
     );
   }
 
-  const formattedBody = formatBody(response.body);
+  const formattedBody = formatted ? formatBody(response.body) : response.body;
+  const isJson = (() => { try { JSON.parse(response.body); return true; } catch { return false; } })();
   const headerEntries = Object.entries(response.headers);
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", borderTop: "1px solid #f0f0f0", minHeight: 200, overflow: "hidden" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", borderTop: `1px solid ${token.colorBorderSecondary}`, minHeight: 200, overflow: "hidden" }}>
       {/* 状态栏 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", borderBottom: `1px solid ${token.colorBorderSecondary}`, flexShrink: 0 }}>
         <Tag color={getStatusColor(response.statusCode)}>
           {response.statusCode || "Error"} {response.statusText}
         </Tag>
@@ -76,6 +80,16 @@ const ResponseViewer: React.FC<Props> = ({ response, loading }) => {
           <DatabaseOutlined style={{ marginRight: 4 }} />
           {formatSize(response.size)}
         </Text>
+        {isJson && (
+          <Button
+            size="small"
+            icon={<FormatPainterOutlined />}
+            type={formatted ? "primary" : "default"}
+            onClick={() => setFormatted(v => !v)}
+          >
+            {formatted ? "已格式化" : "原始"}
+          </Button>
+        )}
       </div>
 
       {/* 响应内容 */}
@@ -92,10 +106,10 @@ const ResponseViewer: React.FC<Props> = ({ response, loading }) => {
                     margin: 0,
                     padding: 12,
                     fontSize: 12,
-                    fontFamily: "monospace",
+                    fontFamily: "var(--ql-font-family, monospace)",
                     whiteSpace: "pre-wrap",
                     wordBreak: "break-all",
-                    background: "#fafafa",
+                    background: token.colorFillQuaternary,
                     borderRadius: 4,
                     maxHeight: "calc(100vh - 500px)",
                     overflow: "auto",
