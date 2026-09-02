@@ -143,11 +143,20 @@ const NotesPage: React.FC = () => {
     }
   };
 
-  const softDelete = async (node: Note) => {
-    await noteApi.remove(node._id);
-    message.success("已移入回收站");
-    if (selectedId === node._id) setSelectedId(null);
-    await loadNotes();
+  const softDelete = (node: Note) => {
+    Modal.confirm({
+      title: "确认删除",
+      content: `确定将「${node.title}」移入回收站？`,
+      okText: "确定",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await noteApi.remove(node._id);
+        message.success("已移入回收站");
+        if (selectedId === node._id) setSelectedId(null);
+        await loadNotes();
+      },
+    });
   };
 
   const rename = (node: Note) => {

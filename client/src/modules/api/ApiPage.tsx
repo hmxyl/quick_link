@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Button, Dropdown, Space, message, Typography } from "antd";
+import { Button, Dropdown, Modal, Space, message, Typography } from "antd";
 import {
   SendOutlined,
   SaveOutlined,
@@ -161,7 +161,7 @@ const ApiPage: React.FC = () => {
           statusCode: res.data.statusCode,
           duration: res.data.duration,
           requestSnapshot: { method, url: resolvedUrl, headers: resolvedHeaders, queryParams, cookies, bodyType, body: resolvedBody, authType },
-          responseSnapshot: { statusCode: res.data.statusCode, statusText: res.data.statusText, size: res.data.size },
+          responseSnapshot: { statusCode: res.data.statusCode, statusText: res.data.statusText, headers: res.data.headers, body: res.data.body, size: res.data.size },
         });
         loadHistory();
       }
@@ -194,18 +194,31 @@ const ApiPage: React.FC = () => {
   }, [loadCollections, loadRequest]);
 
   // 删除
-  const handleDelete = useCallback(async (id: string) => {
-    const res = await apiManagerApi.removeCollectionItem(id);
-    if (res.success) {
-      message.success("已删除");
-      if (currentRequest?._id === id) {
-        setCurrentRequest(null);
-        setUrl("");
-        setResponse(null);
-      }
-      loadCollections();
-    }
-  }, [currentRequest, loadCollections]);
+  const handleDelete = useCallback((id: string) => {
+    // 从集合中查找名称（扁平结构，通过 _id 直接查找）
+    const item = collections.find((c) => c._id === id);
+    const name = item?.name || "该项";
+    const isFolder = item?.type === "folder";
+    Modal.confirm({
+      title: "确认删除",
+      content: `确定删除「${name}」？${isFolder ? "其下所有子项也将被删除。" : ""}`,
+      okText: "确定",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        const res = await apiManagerApi.removeCollectionItem(id);
+        if (res.success) {
+          message.success("已删除");
+          if (currentRequest?._id === id) {
+            setCurrentRequest(null);
+            setUrl("");
+            setResponse(null);
+          }
+          loadCollections();
+        }
+      },
+    });
+  }, [collections, currentRequest, loadCollections]);
 
   // 重命名
   const handleRename = useCallback(async (id: string, name: string) => {
@@ -255,11 +268,11 @@ const ApiPage: React.FC = () => {
     if (item.responseSnapshot) {
       setResponse({
         statusCode: item.statusCode,
-        statusText: "",
-        headers: {},
-        body: "",
+        statusText: item.responseSnapshot.statusText || "",
+        headers: item.responseSnapshot.headers || {},
+        body: item.responseSnapshot.body || "",
         duration: item.duration,
-        size: 0,
+        size: item.responseSnapshot.size || 0,
       });
     }
   }, []);

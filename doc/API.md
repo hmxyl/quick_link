@@ -10,7 +10,7 @@
 
 - **环境管理**：创建多个环境（如开发/测试/生产），每个环境配置键值对变量，请求 URL/Headers/Body 中的 `{{变量名}}` 自动替换为当前激活环境的值
 - **集合树**：支持集合 → 文件夹 → 请求三级结构，右键菜单操作（新建子文件夹、新建请求、重命名、导出集合、删除），删除集合时级联删除所有子项
-- **请求构建**：7 种 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS）、Query Params / Headers / Cookies 键值对编辑（支持启用/禁用）、4 种 Body 类型（none/json/form-urlenc/raw）、Bearer Token 与 Basic Auth 认证、拷贝为 cURL
+- **请求构建**：7 种 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS）、Query Params / Headers / Cookies 键值对编辑（支持启用/禁用）、4 种 Body 类型（none/json/form-urlenc/raw，JSON 模式含一键格式化）、Bearer Token 与 Basic Auth 认证、拷贝为 cURL
 - **响应查看**：状态码（颜色标识）、耗时（ms）、响应大小、Body（JSON 自动格式化）、响应 Headers 表格
 - **历史记录**：每次发送请求自动保存快照（请求参数 + 响应摘要），支持分页加载、点击恢复、清空全部
 - **导出/导入**：右键导出集合为 JSON 文件（含完整树形结构与所有请求配置），支持导入还原
@@ -236,7 +236,7 @@
 - **URL 输入**：支持环境变量占位符 `{{baseUrl}}/api/users`，回车触发发送
 - **快捷键**：`Ctrl+Enter` 或 `Cmd+Enter` 发送请求
 - **Params/Headers/Cookies Tab**：通用键值对编辑器，每行包含启用开关 + Key + Value + 删除按钮，底部"添加"按钮；Cookies Tab 标签显示启用条目数量
-- **Body Tab**：4 种类型切换按钮（none/json/form-urlenc/raw），JSON 和 raw 模式显示代码编辑区（等宽字体）
+- **Body Tab**：4 种类型切换按钮（none/json/form-urlenc/raw），JSON 和 raw 模式显示代码编辑区（等宽字体）；JSON 模式下额外显示「格式化」按钮（画笔图标），点击自动美化 JSON 缩进（2 空格），语法有误时静默忽略
 - **Auth Tab**：认证类型下拉（无认证/Bearer Token/Basic Auth），根据选择动态显示 Token 输入框或用户名+密码输入框
 
 ### 5.5 响应查看器
@@ -275,5 +275,6 @@
 - **扁平列表 + 前端组树**：集合数据量通常不大（数百条），一次返回全部扁平列表由前端组装树，避免递归 API 调用，减少请求次数。
 - **历史快照而非引用**：历史记录保存完整的请求快照和响应摘要，而非引用请求 ID。即使原始请求被修改或删除，历史记录仍可完整恢复当时的请求参数。
 - **导出含版本号**：`version` 字段为后续格式升级预留兼容空间。导入时重新生成 ID 并映射 parentId，确保不同用户间导入不会产生 ID 冲突。
+- **JSON 格式化按钮**：Body 为 JSON 类型时，编辑区旁显示「格式化」按钮（画笔图标），点击调用 `JSON.stringify(parsed, null, 2)` 美化缩进；JSON 语法有误时静默忽略不报错，避免打断用户编辑流程。
 - **Cookies 独立 Tab**：Cookie 键值对与 Params/Headers 共用同一套 KV 编辑器组件，独立为 Tab 便于集中管理；服务端代理将其拼接为 `Cookie` 请求头而非逐条发送，符合 HTTP 协议规范。
 - **cURL 导出**：将当前编辑中的请求（方法/URL/Headers/Cookies/Auth/Body）一键拷贝为 cURL 命令，方便在终端或其他工具中快速复用调试；环境变量在导出时已完成替换。
