@@ -19,6 +19,8 @@ router.delete("/:id", noteController.remove);
 router.post("/:id/restore", noteController.restore);
 router.post("/:id/move", noteController.move);
 router.delete("/:id/permanent", noteController.removePermanent);
+router.get("/:id/file-path", noteController.getFilePath);
+router.post("/:id/open-folder", noteController.openFolder);
 
 // 数据操作
 router.post("/wipe", noteController.wipe);

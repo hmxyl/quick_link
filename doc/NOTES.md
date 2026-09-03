@@ -68,6 +68,8 @@
 | POST | /api/notes/:id/restore | 还原 | Yes |
 | POST | /api/notes/:id/move | 拖拽排序/跨文件夹移动 `{parentId: 目标父级\|null, index: 插入位置}`；同级仅改顺序记录不动磁盘，跨级磁盘移动+附件 noteId/排序记录重映射，禁止移入自身后代 | Yes |
 | DELETE | /api/notes/:id/permanent | 彻底删除（含后代及附件文件） | Yes |
+| GET | /api/notes/:id/file-path | 返回笔记文件绝对路径（桌面版生效） | Yes |
+| POST | /api/notes/:id/open-folder | 在系统文件管理器中打开笔记所在文件夹（跨平台：Win `explorer.exe`；macOS `open`；Linux `xdg-open`；文件节点打开其父目录，文件夹节点打开自身；桌面版生效） | Yes |
 | DELETE | /api/notes/trash | 清空回收站 | Yes |
 | POST | /api/notes/wipe | 数据清空（全部笔记+附件+排序记录） | Yes |
 | GET | /api/notes/export | 导出 zip | Yes |
@@ -96,7 +98,7 @@ quicklink-notes-YYYY-MM-DD.zip
 - **左面板收起/展开**：面板顶部折叠按钮（MenuFold/MenuUnfold 图标，与主侧栏一致）可将面板从 300px 收起到 48px（仅留按钮），树/搜索/切换控件全部隐藏，编辑区获得更大空间；状态存 `localStorage[ql-note-panel-collapsed]`，刷新后保持。
 - **拖拽排序/移动**：文件夹树开启 `draggable`（搜索过滤时禁用避免索引错位）；同级拖动调整顺序（仅更新 `note_orders` 不动磁盘），拖到文件夹上/内部则跨文件夹移动（重名自动追加序号，附件 noteId 与排序记录同步重映射，选中/高亮/展开状态按新路径前缀替换）；禁止拖入自身后代，拖入目标文件夹自动展开。
 - **搜索**：按标题或正文内容过滤（不区分大小写、输入即过滤），保留命中项祖先链。
-- **新建**：「+」下拉与右键空白处均可在第一级目录新建文档/文件夹（支持任意多个根级目录）；右键节点提供新建文档/子层文件夹/子层文件/重命名/移动到/删除。
+- **新建**：「+」下拉与右键空白处均可在第一级目录新建文档/文件夹（支持任意多个根级目录）；右键节点提供新建文档/子层文件夹/子层文件/重命名/移动到/复制文件路径/打开于资源管理器/删除。「复制文件路径」调用 `getFilePath` API 获取笔记文件绝对路径并写入剪贴板（桌面版下可直接定位文件）；「打开于资源管理器」调用 `openFolder` API 在系统文件管理器中打开笔记所在目录（跨平台：Win `explorer.exe`、macOS `open`、Linux `xdg-open`，文件节点打开其父目录，文件夹节点打开自身）。
 - **键盘导航**：↑/↓ 在可见节点间移动选中（文件夹仅高亮不打开预览）；← 收起已展开文件夹或跳回父级；→ 展开文件夹或进入首个子节点；输入框聚焦/弹窗打开时不生效。
 - **重命名**：antd Modal + Input 弹窗（Electron 不实现 `window.prompt`）。
 - **移动到**：右键菜单「移动到」打开目标文件夹选择弹窗（树形选择器，排除自身及其后代），选择后调用 move API 完成跨文件夹移动（重名自动追加序号，附件 noteId 与排序记录同步重映射）。

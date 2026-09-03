@@ -17,6 +17,7 @@ import {
 } from "antd";
 import type { TreeDataNode } from "antd";
 import {
+  CopyOutlined,
   FileMarkdownOutlined,
   FolderOutlined,
   FolderOpenOutlined,
@@ -274,6 +275,8 @@ const NotesPage: React.FC = () => {
       items.push({ type: "divider" });
       items.push({ key: "rename", icon: <FileMarkdownOutlined />, label: "重命名" });
       items.push({ key: "move", icon: <SendOutlined />, label: "移动到" });
+      items.push({ key: "copyPath", icon: <CopyOutlined />, label: "复制文件路径" });
+      items.push({ key: "openFolder", icon: <FolderOpenOutlined />, label: "打开于资源管理器" });
       items.push({ key: "delete", icon: <DeleteOutlined />, label: "删除", danger: true });
     }
     return items;
@@ -291,6 +294,26 @@ const NotesPage: React.FC = () => {
       case "newSiblingFile": createItem("note", node?.parentId || null); break;
       case "rename": if (node) rename(node); break;
       case "move": if (node) openMoveModal(node); break;
+      case "copyPath":
+        if (node) {
+          noteApi.getFilePath(node._id).then((r) => {
+            if (r.success && r.data?.path) {
+              navigator.clipboard.writeText(r.data.path);
+              message.success("已复制文件路径");
+            } else {
+              message.error("获取路径失败");
+            }
+          }).catch(() => message.error("获取路径失败"));
+        }
+        break;
+      case "openFolder":
+        if (node) {
+          noteApi.openFolder(node._id).then((r) => {
+            if (r.success) message.success("已打开所在文件夹");
+            else message.error(r.error || "打开失败");
+          }).catch(() => message.error("打开失败"));
+        }
+        break;
       case "delete": if (node) softDelete(node); break;
     }
   }, [ctxMenu]); // eslint-disable-line react-hooks/exhaustive-deps

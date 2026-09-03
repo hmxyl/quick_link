@@ -1,6 +1,7 @@
 import { Response } from "express";
 import path from "path";
 import fs from "fs";
+import { spawn } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import AdmZip from "adm-zip";
 import { db } from "../../config/database";
@@ -567,4 +568,38 @@ export async function importZip(req: AuthRequest, res: Response) {
     message: `导入成功: ${idMap.size} 个笔记, ${attachmentCount} 个附件`,
     data: { notes: idMap.size, attachments: attachmentCount },
   });
+}
+
+// GET /api/notes/:id/file-path  返回笔记文件的绝对路径
+export function getFilePath(req: AuthRequest, res: Response) {
+  const userId = req.userId!;
+  const rel = req.params.id;
+  let abs: string;
+  try {
+    abs = absOf(userId, rel);
+  } catch {
+    return res.status(400).json({ success: false, error: "非法路径" });
+  }
+  if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "笔记文件不存在" });
+  res.json({ success: true, data: { path: abs } });
+}
+
+// POST /api/notes/:id/open-folder  在系统文件管理器中打开笔记所在文件夹
+export function openFolder(req: AuthRequest, res: Response) {
+  const userId = req.userId!;
+  const rel = req.params.id;
+  let abs: string;
+  try {
+    abs = absOf(userId, rel);
+  } catch {
+    return res.status(400).json({ success: false, error: "非法路径" });
+  }
+  if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "笔记文件不存在" });
+  // 如果是文件, 打开其父目录; 如果是文件夹, 打开自身
+  const target = fs.statSync(abs).isDirectory() ? abs : path.dirname(abs);
+  const opts = { detached: true, stdio: "ignore" as const };
+  if (process.platform === "win32") spawn("explorer.exe", [target], opts).unref();
+  else if (process.platform === "darwin") spawn("open", [target], opts).unref();
+  else spawn("xdg-open", [target], opts).unref();
+  res.json({ success: true, message: "已打开所在文件夹" });
 }

@@ -194,6 +194,14 @@ export const noteApi = {
 
   importZip: (buf: ArrayBuffer) =>
     api.post<ApiResponse>("/notes/import", buf, { headers: { "Content-Type": "application/zip" } }).then((r) => r.data),
+
+  // 获取笔记文件的绝对路径 (桌面版生效)
+  getFilePath: (id: string) =>
+    api.get<ApiResponse<{ path: string }>>(`/notes/${encId(id)}/file-path`).then((r) => r.data),
+
+  // 在系统文件管理器中打开笔记所在文件夹 (桌面版生效)
+  openFolder: (id: string) =>
+    api.post<ApiResponse>(`/notes/${encId(id)}/open-folder`).then((r) => r.data),
 };
 
 // Attachments
