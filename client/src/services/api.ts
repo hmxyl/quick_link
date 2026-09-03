@@ -250,6 +250,10 @@ export const apiManagerApi = {
     api.post<ApiResponse>("/api-manager/collections/export", { id }).then((r) => r.data),
   importCollection: (data: any) =>
     api.post<ApiResponse>("/api-manager/collections/import", { data }).then((r) => r.data),
+  importPostman: (data: any) =>
+    api.post<ApiResponse<{ count: number; collectionName: string }>>("/api-manager/collections/import-postman", { data }).then((r) => r.data),
+  exportPostman: (id: string) =>
+    api.post<ApiResponse>("/api-manager/collections/export-postman", { id }).then((r) => r.data),
 
   // 历史
   listHistory: (params?: { page?: number; limit?: number }) =>
@@ -265,3 +269,4 @@ export const apiManagerApi = {
   send: (data: SendRequestPayload) =>
     api.post<ApiResponse<SendRequestResult>>("/api-manager/send", data).then((r) => r.data),
 };
+

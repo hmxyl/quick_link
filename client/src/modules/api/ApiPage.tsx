@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Button, Dropdown, Modal, Space, message, Typography } from "antd";
+import { Button, Dropdown, Modal, Space, message, Typography, Tree } from "antd";
 import {
   SendOutlined,
   SaveOutlined,
   SettingOutlined,
+  FolderOutlined,
 } from "@ant-design/icons";
 import { apiManagerApi } from "../../services/api";
 import type {
@@ -36,6 +37,7 @@ const ApiPage: React.FC = () => {
 
   // 当前编辑的请求
   const [currentRequest, setCurrentRequest] = useState<ApiCollectionItem | null>(null);
+  const [requestName, setRequestName] = useState("");
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
   const [headers, setHeaders] = useState<KeyValueEntry[]>([]);
@@ -49,6 +51,10 @@ const ApiPage: React.FC = () => {
   // 响应
   const [response, setResponse] = useState<SendRequestResult | null>(null);
   const [sending, setSending] = useState(false);
+
+  // 新建请求保存时选择文件夹
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   // 历史
   const [history, setHistory] = useState<ApiHistory[]>([]);
@@ -95,6 +101,7 @@ const ApiPage: React.FC = () => {
   // 加载请求到编辑器
   const loadRequest = useCallback((item: ApiCollectionItem) => {
     setCurrentRequest(item);
+    setRequestName(item.name || "");
     setMethod(item.method || "GET");
     setUrl(item.url || "");
     setHeaders(item.headers || []);
@@ -110,17 +117,75 @@ const ApiPage: React.FC = () => {
   // 保存当前请求
   const handleSave = useCallback(async () => {
     if (!currentRequest) {
-      message.info("请先选择一个请求或新建一个请求");
+      // 新请求，让用户选择保存位置
+      setSaveModalOpen(true);
       return;
     }
     const res = await apiManagerApi.updateCollectionItem(currentRequest._id, {
-      method, url, headers, queryParams, cookies, bodyType: bodyType as any, body, authType: authType as any, authConfig,
+      name: requestName, method, url, headers, queryParams, cookies, bodyType: bodyType as any, body, authType: authType as any, authConfig,
     });
     if (res.success) {
       message.success("已保存");
       loadCollections();
     }
-  }, [currentRequest, method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig, loadCollections]);
+  }, [currentRequest, requestName, method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig, loadCollections]);
+
+  // 全局 Ctrl+S 保存
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [handleSave]);
+
+  // 确认保存新请求到指定文件夹
+  const handleConfirmSaveNew = useCallback(async () => {
+    if (!selectedFolderId) {
+      message.warning("请选择保存位置");
+      return;
+    }
+    const res = await apiManagerApi.createCollectionItem({
+      type: "request",
+      name: requestName || "新请求",
+      parentId: selectedFolderId,
+      method,
+      url,
+      headers,
+      queryParams,
+      cookies,
+      bodyType: bodyType as any,
+      body,
+      authType: authType as any,
+      authConfig,
+    });
+    if (res.success && res.data) {
+      message.success("已保存");
+      setSaveModalOpen(false);
+      setSelectedFolderId(null);
+      loadCollections();
+      loadRequest(res.data);
+    }
+  }, [selectedFolderId, requestName, method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig, loadCollections, loadRequest]);
+
+  // 新建空白请求 (在右侧面板直接编辑，保存时再选文件夹)
+  const handleNewRequest = useCallback(() => {
+    setCurrentRequest(null);
+    setRequestName("");
+    setMethod("GET");
+    setUrl("");
+    setHeaders([]);
+    setQueryParams([]);
+    setCookies([]);
+    setBodyType("none");
+    setBody("");
+    setAuthType("none");
+    setAuthConfig({});
+    setResponse(null);
+  }, []);
 
   // 发送请求
   const handleSend = useCallback(async () => {
@@ -239,6 +304,45 @@ const ApiPage: React.FC = () => {
       link.remove();
       URL.revokeObjectURL(link.href);
       message.success("导出成功");
+    }
+  }, []);
+
+  // 导入 Postman Collection
+  const handleImportPostman = useCallback(async (file: File) => {
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      if (!json.info || !json.info.schema || !json.info.schema.includes("collection")) {
+        message.error("不是有效的 Postman Collection 文件");
+        return;
+      }
+      const res = await apiManagerApi.importPostman(json);
+      if (res.success && res.data) {
+        message.success(`已导入集合「${res.data.collectionName}」，共 ${res.data.count} 项`);
+        loadCollections();
+      }
+    } catch (err: any) {
+      if (err instanceof SyntaxError) {
+        message.error("JSON 解析失败，请检查文件格式");
+      } else {
+        message.error("导入失败: " + (err.message || "未知错误"));
+      }
+    }
+  }, [loadCollections]);
+
+  // 导出为 Postman Collection
+  const handleExportPostman = useCallback(async (id: string, name: string) => {
+    const res = await apiManagerApi.exportPostman(id);
+    if (res.success && res.data) {
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${name}.postman_collection.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      message.success("已导出为 Postman Collection 文件");
     }
   }, []);
 
@@ -390,9 +494,12 @@ const ApiPage: React.FC = () => {
           onSelectRequest={loadRequest}
           onCreateCollection={handleCreateCollection}
           onCreateChild={handleCreateChild}
+          onNewRequest={handleNewRequest}
           onDelete={handleDelete}
           onRename={handleRename}
           onExport={handleExport}
+          onImportPostman={handleImportPostman}
+          onExportPostman={handleExportPostman}
           onLoadHistory={handleLoadHistory}
           onRefreshHistory={loadHistory}
         />
@@ -401,6 +508,7 @@ const ApiPage: React.FC = () => {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* 请求构建器 */}
           <RequestBuilder
+            requestName={requestName}
             method={method}
             url={url}
             headers={headers}
@@ -411,6 +519,7 @@ const ApiPage: React.FC = () => {
             authType={authType}
             authConfig={authConfig}
             envVars={getEnvVars()}
+            onRequestNameChange={setRequestName}
             onMethodChange={setMethod}
             onUrlChange={setUrl}
             onHeadersChange={setHeaders}
@@ -428,6 +537,43 @@ const ApiPage: React.FC = () => {
           <ResponseViewer response={response} loading={sending} />
         </div>
       </div>
+
+      {/* 新建请求保存位置弹窗 */}
+      <Modal
+        title="选择保存位置"
+        open={saveModalOpen}
+        onOk={handleConfirmSaveNew}
+        onCancel={() => { setSaveModalOpen(false); setSelectedFolderId(null); }}
+        okText="保存"
+        cancelText="取消"
+      >
+        <div style={{ maxHeight: 300, overflow: "auto" }}>
+          <Tree
+            treeData={collections
+              .filter(c => c.type === "collection" || c.type === "folder")
+              .map(c => {
+                const children = collections
+                  .filter(ch => ch.parentId === c._id && (ch.type === "collection" || ch.type === "folder"))
+                  .map(ch => ({
+                    key: ch._id,
+                    title: ch.name,
+                    icon: <FolderOutlined />,
+                  }));
+                return {
+                  key: c._id,
+                  title: c.name,
+                  icon: <FolderOutlined />,
+                  children: children.length > 0 ? children : undefined,
+                };
+              })
+            }
+            selectedKeys={selectedFolderId ? [selectedFolderId] : []}
+            onSelect={(keys) => setSelectedFolderId(keys[0] as string || null)}
+            showIcon
+            defaultExpandAll
+          />
+        </div>
+      </Modal>
 
       {/* 环境管理弹窗 */}
       <EnvironmentModal

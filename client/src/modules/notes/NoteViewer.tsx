@@ -338,6 +338,25 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
     return () => window.removeEventListener("keydown", handler);
   });
 
+  // 自动保存: 编辑模式下停止输入 1.5 秒后自动保存
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (!editing || !dirty) return;
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveContent();
+    }, 1500);
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [draft, editing]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const saveTitle = async () => {
     const t = title.trim();
     if (!t || t === note.title) return;

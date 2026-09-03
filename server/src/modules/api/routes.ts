@@ -23,6 +23,8 @@ router.put("/collections/:id", collCtrl.update);
 router.delete("/collections/:id", collCtrl.remove);
 router.post("/collections/export", collCtrl.exportCollection);
 router.post("/collections/import", collCtrl.importCollection);
+router.post("/collections/import-postman", collCtrl.importPostman);
+router.post("/collections/export-postman", collCtrl.exportPostman);
 
 // 历史记录
 router.get("/history", histCtrl.list);

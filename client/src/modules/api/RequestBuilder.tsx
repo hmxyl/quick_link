@@ -8,6 +8,7 @@ const { TextArea } = Input;
 const METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
 interface Props {
+  requestName: string;
   method: string;
   url: string;
   headers: KeyValueEntry[];
@@ -18,6 +19,7 @@ interface Props {
   authType: string;
   authConfig: Record<string, string>;
   envVars: Record<string, string>;
+  onRequestNameChange: (name: string) => void;
   onMethodChange: (m: string) => void;
   onUrlChange: (u: string) => void;
   onHeadersChange: (h: KeyValueEntry[]) => void;
@@ -81,9 +83,9 @@ const KVEditor: React.FC<{
 };
 
 const RequestBuilder: React.FC<Props> = ({
-  method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig,
+  requestName, method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig,
   envVars,
-  onMethodChange, onUrlChange, onHeadersChange, onQueryParamsChange, onCookiesChange,
+  onRequestNameChange, onMethodChange, onUrlChange, onHeadersChange, onQueryParamsChange, onCookiesChange,
   onBodyTypeChange, onBodyChange, onAuthTypeChange, onAuthConfigChange, onSend, onCopyCurl,
 }) => {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -95,8 +97,19 @@ const RequestBuilder: React.FC<Props> = ({
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+      {/* 接口名称栏 */}
+      <div style={{ padding: "8px 0 0", flexShrink: 0 }}>
+        <Input
+          value={requestName}
+          onChange={e => onRequestNameChange(e.target.value)}
+          placeholder="接口名称 (可编辑)"
+          style={{ fontWeight: 500 }}
+          variant="borderless"
+        />
+      </div>
+
       {/* URL 栏 */}
-      <div style={{ display: "flex", gap: 8, padding: "8px 0", flexShrink: 0 }} onKeyDown={handleKeyDown}>
+      <div style={{ display: "flex", gap: 8, padding: "4px 0 8px", flexShrink: 0 }} onKeyDown={handleKeyDown}>
         <Select
           value={method}
           onChange={onMethodChange}

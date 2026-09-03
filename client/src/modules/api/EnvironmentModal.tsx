@@ -8,11 +8,14 @@ import {
   Switch,
   Typography,
   message,
+  theme,
 } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
   CheckCircleOutlined,
+  ImportOutlined,
+  ExportOutlined,
 } from "@ant-design/icons";
 import { apiManagerApi } from "../../services/api";
 import type { ApiEnvironment, EnvVariable } from "../../types";
@@ -36,10 +39,12 @@ const EnvironmentModal: React.FC<Props> = ({
   onSaved,
   onActivate,
 }) => {
+  const { token } = theme.useToken();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ApiEnvironment | null>(null);
   const [editName, setEditName] = useState("");
   const [editVars, setEditVars] = useState<EnvVariable[]>([]);
+  const importFileRef = React.useRef<HTMLInputElement>(null);
 
   // 选中第一个环境
   useEffect(() => {
@@ -96,6 +101,63 @@ const EnvironmentModal: React.FC<Props> = ({
     }
   }, [selectedId, onSaved]);
 
+  // 导入 Postman 环境 JSON
+  const handleImportPostman = useCallback(async (file: File) => {
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      // 校验是否为 Postman 环境文件
+      if (!json._postman_variable_scope || json._postman_variable_scope !== "environment") {
+        message.error("不是有效的 Postman 环境文件 (缺少 _postman_variable_scope)");
+        return;
+      }
+      const name = (json.name || "导入的环境").trim();
+      const variables: EnvVariable[] = (json.values || []).map((v: any) => ({
+        key: String(v.key || ""),
+        value: String(v.value || ""),
+        enabled: v.enabled !== false,
+      }));
+      const res = await apiManagerApi.createEnvironment({ name, variables });
+      if (res.success && res.data) {
+        message.success(`已导入环境「${name}」，共 ${variables.length} 个变量`);
+        onSaved();
+        setSelectedId(res.data._id);
+      }
+    } catch (err: any) {
+      if (err instanceof SyntaxError) {
+        message.error("JSON 解析失败，请检查文件格式");
+      } else {
+        message.error("导入失败: " + (err.message || "未知错误"));
+      }
+    }
+  }, [onSaved]);
+
+  // 导出当前环境为 Postman 格式
+  const handleExportPostman = useCallback(() => {
+    if (!editing) return;
+    const postmanJson = {
+      id: editing._id,
+      name: editName,
+      values: editVars.map(v => ({
+        key: v.key,
+        value: v.value,
+        type: "default",
+        enabled: v.enabled,
+      })),
+      _postman_variable_scope: "environment",
+      _postman_exported_at: new Date().toISOString(),
+      _postman_exported_using: "QuickLink",
+    };
+    const blob = new Blob([JSON.stringify(postmanJson, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${editName || "environment"}.postman_environment.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    message.success("已导出为 Postman 环境文件");
+  }, [editing, editName, editVars]);
+
   // 变量操作
   const addVar = () => {
     setEditVars([...editVars, { key: "", value: "", enabled: true }]);
@@ -118,10 +180,27 @@ const EnvironmentModal: React.FC<Props> = ({
       onCancel={onClose}
       width={720}
       footer={null}
+      styles={{
+        content: {
+          resize: "both",
+          minWidth: 500,
+          minHeight: 400,
+          overflow: "hidden",
+          height: 520,
+          display: "flex",
+          flexDirection: "column",
+        },
+        body: {
+          flex: 1,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        },
+      }}
     >
-      <div style={{ display: "flex", gap: 16, minHeight: 400 }}>
+      <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
         {/* 左侧环境列表 */}
-        <div style={{ width: 200, borderRight: "1px solid #f0f0f0", paddingRight: 12 }}>
+        <div style={{ width: 200, borderRight: `1px solid ${token.colorBorderSecondary}`, paddingRight: 12 }}>
           <List
             size="small"
             dataSource={environments}
@@ -130,7 +209,7 @@ const EnvironmentModal: React.FC<Props> = ({
                 style={{
                   cursor: "pointer",
                   padding: "8px",
-                  background: selectedId === env._id ? "#e6f4ff" : undefined,
+                  background: selectedId === env._id ? token.colorPrimaryBg : "transparent",
                   borderRadius: 4,
                 }}
                 onClick={() => setSelectedId(env._id)}
@@ -159,12 +238,33 @@ const EnvironmentModal: React.FC<Props> = ({
           <Button size="small" type="dashed" icon={<PlusOutlined />} block onClick={handleCreate} style={{ marginTop: 8 }}>
             新建环境
           </Button>
+          <Button
+            size="small"
+            type="dashed"
+            icon={<ImportOutlined />}
+            block
+            onClick={() => importFileRef.current?.click()}
+            style={{ marginTop: 4 }}
+          >
+            导入 Postman
+          </Button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".json"
+            style={{ display: "none" }}
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) handleImportPostman(f);
+              e.target.value = "";
+            }}
+          />
         </div>
 
         {/* 右侧编辑区 */}
         <div style={{ flex: 1 }}>
           {editing ? (
-            <div>
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
               <div style={{ marginBottom: 12 }}>
                 <Text strong>环境名称</Text>
                 <Input
@@ -177,7 +277,7 @@ const EnvironmentModal: React.FC<Props> = ({
                 <Text strong>环境变量</Text>
                 <Button size="small" icon={<PlusOutlined />} onClick={addVar}>添加变量</Button>
               </div>
-              <div style={{ maxHeight: 280, overflow: "auto" }}>
+              <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
                 {editVars.map((v, i) => (
                   <div key={i} style={{ display: "flex", gap: 4, marginBottom: 4, alignItems: "center" }}>
                     <Switch size="small" checked={v.enabled} onChange={val => updateVar(i, "enabled", val)} />
@@ -189,6 +289,7 @@ const EnvironmentModal: React.FC<Props> = ({
               </div>
               <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                 <Button type="primary" onClick={handleSave}>保存</Button>
+                <Button icon={<ExportOutlined />} onClick={handleExportPostman}>导出 Postman</Button>
                 {editing._id !== activeEnvId && (
                   <Button onClick={() => onActivate(editing._id)}>激活此环境</Button>
                 )}

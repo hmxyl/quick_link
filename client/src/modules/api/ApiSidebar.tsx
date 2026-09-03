@@ -20,6 +20,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   ExportOutlined,
+  ImportOutlined,
   ReloadOutlined,
   ClearOutlined,
 } from "@ant-design/icons";
@@ -45,9 +46,12 @@ interface Props {
   onSelectRequest: (item: ApiCollectionItem) => void;
   onCreateCollection: (name: string) => void;
   onCreateChild: (parentId: string, type: "folder" | "request", name: string) => void;
+  onNewRequest: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onExport: (id: string, name: string) => void;
+  onImportPostman: (file: File) => void;
+  onExportPostman: (id: string, name: string) => void;
   onLoadHistory: (item: ApiHistory) => void;
   onRefreshHistory: () => void;
 }
@@ -68,9 +72,12 @@ const ApiSidebar: React.FC<Props> = ({
   onSelectRequest,
   onCreateCollection,
   onCreateChild,
+  onNewRequest,
   onDelete,
   onRename,
   onExport,
+  onImportPostman,
+  onExportPostman,
   onLoadHistory,
   onRefreshHistory,
 }) => {
@@ -80,6 +87,7 @@ const ApiSidebar: React.FC<Props> = ({
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; item: ApiCollectionItem } | null>(null);
   const treeRef = useRef<any>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const { token } = theme.useToken();
 
   // 构建扁平 -> 树形结构
@@ -225,6 +233,12 @@ const ApiSidebar: React.FC<Props> = ({
           label: "导出集合",
           onClick: () => onExport(item._id, item.name),
         });
+        items.push({
+          key: "exportPostman",
+          icon: <ExportOutlined />,
+          label: "导出 Postman",
+          onClick: () => onExportPostman(item._id, item.name),
+        });
       }
     }
 
@@ -249,7 +263,7 @@ const ApiSidebar: React.FC<Props> = ({
     });
 
     return items;
-  }, [onCreateChild, onExport, onDelete]);
+  }, [onCreateChild, onExport, onExportPostman, onDelete]);
 
   // 自定义树节点渲染
   const titleRender = useCallback((nodeData: TreeNodeData) => {
@@ -318,6 +332,37 @@ const ApiSidebar: React.FC<Props> = ({
                     onClick={() => onCreateCollection("新集合")}
                   >
                     新建集合
+                  </Button>
+                  <Button
+                    size="small"
+                    type="dashed"
+                    icon={<ImportOutlined />}
+                    block
+                    onClick={() => importFileRef.current?.click()}
+                    style={{ marginTop: 4 }}
+                  >
+                    导入 Postman
+                  </Button>
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept=".json"
+                    style={{ display: "none" }}
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) onImportPostman(f);
+                      e.target.value = "";
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    type="dashed"
+                    icon={<FileOutlined />}
+                    block
+                    onClick={onNewRequest}
+                    style={{ marginTop: 4 }}
+                  >
+                    新建请求
                   </Button>
                 </div>
                 {treeData.length === 0 ? (

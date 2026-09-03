@@ -4,16 +4,16 @@
 
 ## 1. 功能概览
 
-模仿 Postman 的本地接口管理工具，支持环境配置与切换、集合/文件夹/请求三级树形管理、HTTP 请求发送与响应查看（含 Cookies 编辑）、请求历史记录、集合导出/导入、拷贝为 cURL。
+模仿 Postman 的本地接口管理工具，支持环境配置与切换、集合/文件夹/请求三级树形管理、HTTP 请求发送与响应查看（含 Cookies 编辑）、请求历史记录、集合导出/导入（原生格式与 Postman Collection 双向兼容）、拷贝为 cURL。
 
 **核心能力**：
 
 - **环境管理**：创建多个环境（如开发/测试/生产），每个环境配置键值对变量，请求 URL/Headers/Body 中的 `{{变量名}}` 自动替换为当前激活环境的值
-- **集合树**：支持集合 → 文件夹 → 请求三级结构，右键菜单操作（新建子文件夹、新建请求、重命名、导出集合、删除），删除集合时级联删除所有子项
-- **请求构建**：7 种 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS）、Query Params / Headers / Cookies 键值对编辑（支持启用/禁用）、4 种 Body 类型（none/json/form-urlenc/raw，JSON 模式含一键格式化）、Bearer Token 与 Basic Auth 认证、拷贝为 cURL
+- **集合树**：支持集合 → 文件夹 → 请求三级结构，右键菜单操作（新建子文件夹、新建请求、重命名、导出集合、删除），删除集合时级联删除所有子项；键盘方向键导航（↑↓ 移动选中、← 收起/跳父级、→ 展开/进入子节点、Enter 加载请求）
+- **请求构建**：可编辑接口名称栏、7 种 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS）、Query Params / Headers / Cookies 键值对编辑（支持启用/禁用）、4 种 Body 类型（none/json/form-urlenc/raw，JSON 模式含一键格式化）、Bearer Token 与 Basic Auth 认证、拷贝为 cURL
 - **响应查看**：状态码（颜色标识）、耗时（ms）、响应大小、Body（JSON 自动格式化）、响应 Headers 表格
-- **历史记录**：每次发送请求自动保存快照（请求参数 + 响应摘要），支持分页加载、点击恢复、清空全部
-- **导出/导入**：右键导出集合为 JSON 文件（含完整树形结构与所有请求配置），支持导入还原
+- **历史记录**：每次发送请求自动保存快照（请求参数 + 响应摘要），支持分页加载、点击恢复（含响应结果）、清空全部
+- **导出/导入**：右键导出集合为 JSON 文件（含完整树形结构与所有请求配置），支持导入还原；支持 Postman Collection v2.1 格式双向导入/导出（导入自动解析文件夹/请求/Headers/Query/Body/Auth，导出生成标准 `.postman_collection.json`）
 
 **代码位置**：
 
@@ -93,10 +93,14 @@
 | DELETE | /api/api-manager/collections/:id | 删除节点（集合/文件夹级联删除所有子孙） | Yes |
 | POST | /api/api-manager/collections/export | 导出集合 `{id}` → 返回 `{version, exportedAt, root, items}` | Yes |
 | POST | /api/api-manager/collections/import | 导入集合 `{data}` → 自动重新生成 ID 并映射 parentId | Yes |
+| POST | /api/api-manager/collections/import-postman | 导入 Postman Collection v2.1 `{data}` → 自动创建根集合，递归解析文件夹/请求（含 Headers/Query/Body/Auth），返回 `{count, collectionName}` | Yes |
+| POST | /api/api-manager/collections/export-postman | 导出集合 `{id}` 为 Postman Collection v2.1 格式 → 返回标准 `{info, item}` 结构（文件名 `.postman_collection.json`） | Yes |
 
 - 前端获取扁平列表后根据 `parentId` 关系自行组装为树形结构，避免服务端递归查询。
 - 导出格式包含 `version`（版本号，当前为 1）、`exportedAt`（导出时间）、`root`（根节点完整数据）、`items`（所有子孙节点扁平数组）。
 - 导入时服务端为每个节点重新生成 `_id`，通过 `idMap` 映射旧 ID → 新 ID 以正确重建 `parentId` 关系。
+- Postman 导入：解析 `info.schema` 验证格式，递归处理 `item` 树——有子项的节点创建为文件夹，含 `request` 的叶节点创建为请求（提取 method/url/headers/queryParams/body/auth）；URL 优先取 `raw` 字段，Body 按 `mode` 区分 json/raw/urlencoded/formdata，Auth 识别 bearer/basic。
+- Postman 导出：将集合树转换为 Postman Collection v2.1 标准结构——文件夹递归嵌套为 `item` 数组，请求节点生成 `method/header/url/body/auth/response` 字段；URL 自动解析为 `{protocol, host, port, path, query}` 对象；JSON Body 附带 `options.raw.language: "json"`。
 
 ### 3.3 历史记录
 
@@ -210,9 +214,11 @@
 +-------------------+--------------------------------------+
 ```
 
-- **顶部工具栏**：环境下拉选择器（含"无环境"和"管理环境..."选项）、发送按钮、保存按钮；URL 栏右侧 cURL 按钮将当前请求（含环境变量替换后的值、Headers、Cookies、Auth、Body）拷贝为 cURL 命令到剪贴板
+- **顶部工具栏**：环境下拉选择器（含"无环境"和"管理环境..."选项）、发送按钮、保存按钮（Ctrl+S 全局快捷键）；URL 栏右侧 cURL 按钮将当前请求（含环境变量替换后的值、Headers、Cookies、Auth、Body）拷贝为 cURL 命令到剪贴板
 - **左侧面板**（280px 固定宽度）：集合/历史两个 Tab 页切换
-- **右侧内容区**：上方请求构建器 + 下方响应查看器，灵活分配空间
+  - **集合 Tab**：顶部三个快捷按钮——「新建集合」「导入 Postman」（选择 `.json` 文件）「新建请求」（空白请求，保存时弹窗选择文件夹）；其下为树形结构
+  - **历史 Tab**：刷新 + 清空按钮；列表每行显示方法标签 + 状态码标签 + 耗时 + URL（单行省略）
+- **右侧内容区**：上方请求构建器（含可编辑接口名称栏） + 下方响应查看器，灵活分配空间
 
 ### 5.2 集合树
 
@@ -232,9 +238,10 @@
 
 ### 5.4 请求构建器
 
+- **接口名称栏**：顶部 Input 输入框（无边框样式），可直接编辑当前请求的名称；保存时同步更新到集合树节点标题
 - **方法选择**：Select 下拉，7 种 HTTP 方法
 - **URL 输入**：支持环境变量占位符 `{{baseUrl}}/api/users`，回车触发发送
-- **快捷键**：`Ctrl+Enter` 或 `Cmd+Enter` 发送请求
+- **快捷键**：`Ctrl+Enter` 或 `Cmd+Enter` 发送请求；`Ctrl+S` 保存当前请求（全局生效，未保存的新请求弹出保存位置选择）
 - **Params/Headers/Cookies Tab**：通用键值对编辑器，每行包含启用开关 + Key + Value + 删除按钮，底部"添加"按钮；Cookies Tab 标签显示启用条目数量
 - **Body Tab**：4 种类型切换按钮（none/json/form-urlenc/raw），JSON 和 raw 模式显示代码编辑区（等宽字体）；JSON 模式下额外显示「格式化」按钮（画笔图标），点击自动美化 JSON 缩进（2 空格），语法有误时静默忽略
 - **Auth Tab**：认证类型下拉（无认证/Bearer Token/Basic Auth），根据选择动态显示 Token 输入框或用户名+密码输入框
@@ -256,7 +263,7 @@
 ### 5.7 历史记录面板
 
 - 列表形式展示，每条包含：方法标签（颜色同集合树）、状态码标签、耗时、URL（单行省略）
-- 点击历史条目恢复请求参数到编辑器（URL/方法/Headers/Params/Cookies/Body/Auth）
+- 点击历史条目恢复请求参数到编辑器（URL/方法/Headers/Params/Cookies/Body/Auth），同时恢复响应结果（状态码/耗时/Body/Headers）
 - 顶部操作按钮：刷新、清空全部（Popconfirm 二次确认）
 
 ### 5.8 快捷键
@@ -265,6 +272,11 @@
 | ------ | ---- |
 | `Ctrl/Cmd + Enter` | 发送请求（URL 输入框和请求构建器区域均生效） |
 | `Enter`（URL 输入框） | 发送请求 |
+| `Ctrl/Cmd + S` | 保存当前请求（全局生效；未保存的新请求弹出保存位置选择弹窗） |
+| `↑/↓`（集合树） | 在可见节点间移动选中 |
+| `←`（集合树） | 收起已展开文件夹 / 跳到父级节点 |
+| `→`（集合树） | 展开文件夹 / 进入首个子节点 |
+| `Enter`（集合树） | 加载选中的请求到编辑器 |
 
 ## 6. 设计决策
 
@@ -278,3 +290,6 @@
 - **JSON 格式化按钮**：Body 为 JSON 类型时，编辑区旁显示「格式化」按钮（画笔图标），点击调用 `JSON.stringify(parsed, null, 2)` 美化缩进；JSON 语法有误时静默忽略不报错，避免打断用户编辑流程。
 - **Cookies 独立 Tab**：Cookie 键值对与 Params/Headers 共用同一套 KV 编辑器组件，独立为 Tab 便于集中管理；服务端代理将其拼接为 `Cookie` 请求头而非逐条发送，符合 HTTP 协议规范。
 - **cURL 导出**：将当前编辑中的请求（方法/URL/Headers/Cookies/Auth/Body）一键拷贝为 cURL 命令，方便在终端或其他工具中快速复用调试；环境变量在导出时已完成替换。
+- **Postman Collection 双向兼容**：支持导入 Postman Collection v2.1 格式（`.json` 文件，侧栏「导入 Postman」按钮触发），自动解析文件夹/请求/Headers/Query/Body/Auth 并创建到本地集合树；同时支持将本地集合导出为 Postman Collection v2.1 格式（右键菜单「导出 Postman」或侧栏按钮），生成标准 `.postman_collection.json` 文件，可直接在 Postman 中导入使用。双向转换覆盖 method/url/headers/queryParams/bodyType/body/authType 等核心字段，URL 导出时自动解析为 Postman 结构化对象（protocol/host/port/path/query）。
+- **接口名称可编辑**：请求构建器顶部独立名称输入框，用户可直接修改当前请求名称并保存，无需通过右键菜单重命名；新建请求时默认为空，保存时若名称为空则使用「新请求」。
+- **集合树键盘导航**：↑/↓ 在可见节点间移动选中，← 收起已展开文件夹或跳到父级，→ 展开文件夹或进入首个子节点，Enter 加载请求到编辑器；输入框聚焦/弹窗打开/右键菜单/重命名时不生效，避免冲突。
