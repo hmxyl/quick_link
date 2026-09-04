@@ -4,14 +4,14 @@
 
 ## 1. 功能概览
 
-文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏）、回收站、附件管理、zip 导入/导出。
+文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F）、右键复制文件路径/打开于资源管理器、回收站、附件管理、zip 导入/导出。
 
 **代码位置**：
 
 | 端 | 目录 | 文件 |
 | -- | ---- | ---- |
 | 服务端 | `server/src/modules/notes/` | `noteController.ts`（文件树/排序/导入导出）、`attachmentController.ts`（附件+系统打开）、`routes.ts` |
-| 前端 | `client/src/modules/notes/` | `NotesPage.tsx`（树/工具栏/回收站）、`NoteViewer.tsx`（双模式编辑）、`MilkdownEditor.tsx`（所见即所得，懒加载）、`AttachmentManager.tsx`（附件管理弹窗） |
+| 前端 | `client/src/modules/notes/` | `NotesPage.tsx`（树/工具栏/回收站）、`NoteViewer.tsx`（双模式编辑/笔记内搜索替换/大纲）、`MilkdownEditor.tsx`（所见即所得，懒加载）、`AttachmentManager.tsx`（附件管理弹窗）；`client/src/styles/markdown.css`（预览样式+搜索高亮+深色模式） |
 
 ## 2. 存储设计
 
@@ -109,6 +109,8 @@ quicklink-notes-YYYY-MM-DD.zip
 - **Milkdown 集成**：`MilkdownEditor.tsx` 封装 Crepe 实例（挂载/销毁、`listener.markdownUpdated` 回传 markdown）；因体积较大用 `React.lazy` 懒加载（仅进入所见即所得时下载）。
 - **回收站**：还原/彻底删除/清空；还原时原父级不存在挂回根级。
 - **附件**：原始字节流上传拷贝存 `attachment/`；支持下载/删除/编辑模式插入 Markdown 链接；附件管理弹窗统一查看。
+- **笔记内搜索与替换**：`Ctrl+F` 打开搜索栏（Escape 关闭），在笔记正文中高亮匹配词（不区分大小写）；搜索栏显示当前命中序号/总命中数、上下翻页按钮；源码编辑模式下额外显示替换输入框+替换/全部替换按钮（替换直接修改 draft，保存时落盘）；预览模式下搜索栏固定在预览区顶部；高亮样式为黄底圆角标记（当前命中橙色，深色模式对应深黄/深橙色），CSS 类 `mark.ql-search-hl` / `mark.ql-search-hl-current`；切换笔记时自动关闭搜索。
+- **预览区链接打开**：预览模式下点击 Markdown 正文中的链接，经 `handlePreviewLinkClick` 拦截冒泡——桌面版通过 Electron `window.quicklink.openExternal` 用系统默认浏览器打开，Web 版用 `window.open` 新标签页打开；锚点链接（`#` 开头）和 `javascript:` 协议不拦截。
 - **附件管理弹窗**：每行四键（下载/打开所在文件夹/打开所属笔记/删除）；「所属笔记」列同时识别上传笔记（`noteId`）与正文链接引用的笔记，多个时顿号连接。「打开所属笔记」关闭弹窗后在文件夹树中高亮全部归属笔记（黄底描边，手动选择节点后清除），自动展开祖先并打开第一个笔记；`Ctrl + 左键`点击行直接用系统默认程序打开附件文件（服务端 `POST /attachments/:id/open-file`，桌面版生效）。
 
 ## 5. 设计决策
@@ -117,6 +119,8 @@ quicklink-notes-YYYY-MM-DD.zip
 - **重命名弹窗替代 window.prompt**：Electron 不实现 `window.prompt`（调用直接无效）；antd Modal + Input 支持校验/回车提交/自动聚焦，Web 与桌面行为一致。
 - **图片尺寸存储约定**：标准 Markdown 无图片宽高语法，而 Milkdown Crepe 块级图片节点仅有 {src, caption, ratio} 属性（alt 会被丢弃为 ratio、组件不支持像素尺寸），因此尺寸编码进图片 title（`ql-size:WxH` 后缀，单位像素，宽高均可省略其一，如 `ql-size:640x` / `ql-size:x180`）：① 所见即所得：inline 图片存 title、块级图片存 caption（↔ title），由 `MilkdownEditor` 的 ProseMirror 插件解析并在 DOM 上注入 `style.width/height`（每次文档更新与图片 load 事件后按 src 配对应用，覆盖 Crepe 组件按自然尺寸重置的行为；inline 图片的 title 悬停提示同时剥除尺寸代码）；② 源码+预览与只读预览：`NoteViewer` 的 marked 自定义渲染器解析 title 输出 `<img width/height>`，尺寸代码不进入 title 属性；③ 往返稳定：该编码经 remark 序列化后原样保留，不影响标准 Markdown 兼容性。块级图片弹出 Crepe 自带的说明编辑框时会显示尺寸代码（接受的折衷）。
 - **大纲侧边栏**：预览模式下用户常需快速定位长文档中的章节；从 Markdown 标题自动提取大纲（H1~H6 按层级缩进），点击跳转（标题 ID 由 slug 生成，与渲染器共用逻辑保证一致）；代码围栏内的标题排除；开关状态持久化（默认显示），不影响编辑模式（编辑时隐藏）。
+- **笔记内搜索 DOM 高亮方案**：预览模式搜索使用 `document.createTreeWalker` 遍历文本节点，按匹配词拆分并用 `<mark class="ql-search-hl">` 包裹（当前命中追加 `ql-search-hl-current`），替换时直接操作 DOM 父节点；编辑模式搜索基于字符串匹配（`draft` 状态），替换直接修改 draft 字符串。两种模式共用搜索栏 UI 与快捷键，切换笔记时自动清除高亮并重置状态。
+- **表格宽度 100%**：Markdown 预览表格样式 `width: 100%`（早期 `auto` 导致窄内容表格不撑满容器，改为全宽后视觉更稳定）。
 - **表格单元格内换行（`<br />`）双向转换**：GFM 表格单元格内换行的标准 Markdown 语法是 `<br />`，但 Milkdown 默认行为会导致编辑保存后换行丢失。原因有二：① Parse 侧：preset-commonmark 的 `remark-preserve-empty-line` 插件会删除 mdast 中所有 `<br />` html 节点（不区分是否位于表格单元格），若自定义转换插件在其后运行则单元格内 `<br />` 已被清空；② Serialize 侧：Milkdown 序列化器会把单元格内容包成 `paragraph` 节点（`tableCell > paragraph > break`），导致 break 节点的直接父级是 `paragraph` 而非 `tableCell`。修复：① Parse 侧：自定义 remark 插件必须**置顶注册**（排在所有内置转换器之前），先把单元格内 `<br />` 转成 `break` 节点，preserve 插件随后只清理段落级 `<br />`；② Serialize 侧：自定义 break handler 通过 `state.stack.includes("tableCell")` 检查祖先链（不仅看直接父级），单元格内输出 `<br />`，其他位置沿用默认 handler（行尾 `\` 换行）。Ctrl+Enter 在单元格内插入 hardbreak 节点（绕过 GFM 表格 keymap 的退出表格行为），序列化时同样走此 handler。
 
 ## 6. 测试

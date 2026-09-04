@@ -61,7 +61,7 @@
 .ql-markdown table {
   border-collapse: collapse;
   margin: 0.6em 0;
-  width: auto;
+  width: 100%;
 }
 
 .ql-markdown th,
@@ -175,4 +175,29 @@ html[data-theme="dark"] .ql-milkdown-root .milkdown {
   --crepe-color-hover: #232323;
   --crepe-color-selected: #2f2f2f;
   --crepe-color-inline-area: #2b2b2b;
+}
+
+/* 笔记内搜索高亮 */
+.ql-markdown mark.ql-search-hl {
+  background: #fff3bf;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.ql-markdown mark.ql-search-hl-current {
+  background: #ff9632;
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+html[data-theme="dark"] .ql-markdown mark.ql-search-hl {
+  background: #614a19;
+  color: inherit;
+}
+
+html[data-theme="dark"] .ql-markdown mark.ql-search-hl-current {
+  background: #d47a00;
+  color: #fff;
 }

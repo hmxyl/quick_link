@@ -24,6 +24,9 @@ import {
   DeleteOutlined,
   LinkOutlined,
   UnorderedListOutlined,
+  SearchOutlined,
+  CloseOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import { marked, Renderer, type Tokens } from "marked";
 import type { Attachment, Note } from "../../types";
@@ -175,6 +178,14 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
   // 外部插入内容 (如附件链接) 时递增, 强制所见即所得编辑器重载以应用新 draft
   const [wysiKey, setWysiKey] = useState(0);
 
+  // 笔记内搜索
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentSearchIdx, setCurrentSearchIdx] = useState(1);
+  const [replaceText, setReplaceText] = useState("");
+  const searchInputRef = React.useRef<any>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
   // 链接/图片插入弹窗 (两种编辑模式共用; 光标/选区在已有链接/图片上时为编辑回填)
   const [mediaModal, setMediaModal] = useState<{ kind: "link" | "image"; mode: EditMode } | null>(null);
   const [mediaForm] = Form.useForm();
@@ -281,6 +292,8 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
     setEditing(false);
     setDraft(note.content || "");
     setTitle(note.title);
+    setShowSearch(false);
+    setSearchQuery("");
   }, [note._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -474,6 +487,172 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
     }
   };
 
+  // ---- 笔记内搜索 ----
+
+  const clearHighlights = useCallback(() => {
+    const container = contentRef.current?.querySelector(".ql-markdown");
+    if (!container) return;
+    const marks = container.querySelectorAll("mark.ql-search-hl");
+    marks.forEach((mark) => {
+      const parent = mark.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
+        parent.normalize();
+      }
+    });
+  }, []);
+
+  const highlightSearch = useCallback((query: string, current: number): number => {
+    const container = contentRef.current?.querySelector(".ql-markdown");
+    if (!container || !query.trim()) return 0;
+    const q = query.toLowerCase();
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+    const nodes: Text[] = [];
+    let node: Node | null;
+    while ((node = walker.nextNode())) nodes.push(node as Text);
+    let total = 0;
+    let idx = 0;
+    for (const textNode of nodes) {
+      const text = textNode.textContent || "";
+      const lower = text.toLowerCase();
+      const parts: { text: string; isMatch: boolean }[] = [];
+      let last = 0;
+      let pos: number;
+      while ((pos = lower.indexOf(q, last)) !== -1) {
+        if (pos > last) parts.push({ text: text.slice(last, pos), isMatch: false });
+        total++;
+        idx++;
+        parts.push({ text: text.slice(pos, pos + q.length), isMatch: true });
+        last = pos + q.length;
+      }
+      if (last < text.length) parts.push({ text: text.slice(last), isMatch: false });
+      if (parts.length > 0 && parts.some((p) => p.isMatch)) {
+        const frag = document.createDocumentFragment();
+        for (const part of parts) {
+          if (part.isMatch) {
+            const mark = document.createElement("mark");
+            mark.className = "ql-search-hl";
+            mark.textContent = part.text;
+            frag.appendChild(mark);
+          } else {
+            frag.appendChild(document.createTextNode(part.text));
+          }
+        }
+        textNode.parentNode?.replaceChild(frag, textNode);
+      }
+    }
+    if (total > 0 && current >= 1 && current <= total) {
+      const el = container.querySelectorAll("mark.ql-search-hl")[current - 1];
+      if (el) {
+        el.classList.add("ql-search-hl-current");
+        el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }
+    return total;
+  }, []);
+
+  const openSearch = useCallback(() => {
+    setShowSearch(true);
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+      if (editing) {
+        const el = getEl();
+        el?.focus();
+      }
+    }, 50);
+  }, [editing]);
+
+  const closeSearch = useCallback(() => {
+    setShowSearch(false);
+    setSearchQuery("");
+    setCurrentSearchIdx(1);
+    if (!editing) clearHighlights();
+  }, [editing, clearHighlights]);
+
+  const searchTotal = useMemo(() => {
+    if (!showSearch || !searchQuery.trim()) return 0;
+    const content = (editing ? draft : note.content || "").toLowerCase();
+    const q = searchQuery.toLowerCase();
+    let count = 0;
+    let pos = 0;
+    while ((pos = content.indexOf(q, pos)) !== -1) {
+      count++;
+      pos += q.length;
+    }
+    return count;
+  }, [showSearch, searchQuery, editing, note.content, draft]);
+
+  const handleSearchNext = useCallback(() => {
+    if (searchTotal === 0) return;
+    const next = currentSearchIdx >= searchTotal ? 1 : currentSearchIdx + 1;
+    setCurrentSearchIdx(next);
+    clearHighlights();
+    requestAnimationFrame(() => highlightSearch(searchQuery, next));
+  }, [searchTotal, currentSearchIdx, searchQuery, clearHighlights, highlightSearch]);
+
+  const handleSearchPrev = useCallback(() => {
+    if (searchTotal === 0) return;
+    const prev = currentSearchIdx <= 1 ? searchTotal : currentSearchIdx - 1;
+    setCurrentSearchIdx(prev);
+    clearHighlights();
+    requestAnimationFrame(() => highlightSearch(searchQuery, prev));
+  }, [searchTotal, currentSearchIdx, searchQuery, clearHighlights, highlightSearch]);
+
+  const handleReplace = useCallback(() => {
+    if (!searchQuery || searchTotal === 0) return;
+    const q = searchQuery.toLowerCase();
+    const content = draft;
+    const lower = content.toLowerCase();
+    let pos = -1;
+    let count = 0;
+    for (let i = 0; i < currentSearchIdx; i++) {
+      pos = lower.indexOf(q, pos + 1);
+      if (pos === -1) return;
+      if (i < currentSearchIdx - 1) count++;
+    }
+    const newDraft = content.slice(0, pos) + replaceText + content.slice(pos + searchQuery.length);
+    setDraft(newDraft);
+    const newTotal = searchTotal - 1;
+    if (newTotal === 0) {
+      setCurrentSearchIdx(1);
+    } else {
+      setCurrentSearchIdx(currentSearchIdx > newTotal ? 1 : currentSearchIdx);
+    }
+  }, [draft, searchQuery, replaceText, currentSearchIdx, searchTotal]);
+
+  const handleReplaceAll = useCallback(() => {
+    if (!searchQuery || searchTotal === 0) return;
+    const regex = new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    setDraft(draft.replace(regex, replaceText));
+    setCurrentSearchIdx(1);
+  }, [draft, searchQuery, replaceText, searchTotal]);
+
+  // 搜索高亮 (预览模式, DOM 更新后执行)
+  useEffect(() => {
+    if (editing || !showSearch || !searchQuery.trim()) {
+      clearHighlights();
+      return;
+    }
+    requestAnimationFrame(() => highlightSearch(searchQuery, currentSearchIdx));
+  }, [editing, showSearch, searchQuery, currentSearchIdx, highlightSearch, clearHighlights]);
+
+  // Ctrl+F 打开搜索, Escape 关闭搜索
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        if (!showSearch) {
+          e.preventDefault();
+          openSearch();
+        }
+      }
+      if (e.key === "Escape" && showSearch) {
+        closeSearch();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showSearch, openSearch, closeSearch]);
+
   const mdToolbar: { tip: string; label: React.ReactNode; onClick?: () => void; kind?: "link" | "image" }[] = [
     { tip: "一级标题", label: "H1", onClick: () => prefixLines("# ") },
     { tip: "二级标题", label: "H2", onClick: () => prefixLines("## ") },
@@ -616,6 +795,45 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
           <>
             {editing && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+                {/* 编辑搜索替换栏 */}
+                {showSearch && (
+                  <div style={{ marginBottom: 6, padding: "6px 10px", border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 6, background: token.colorFillQuaternary }}>
+                    <Space size="small" wrap>
+                      <Input
+                        ref={searchInputRef}
+                        placeholder="查找..."
+                        value={searchQuery}
+                        onChange={(e) => { setSearchQuery(e.target.value); setCurrentSearchIdx(1); }}
+                        onPressEnter={handleSearchNext}
+                        size="small"
+                        style={{ width: 160 }}
+                        prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
+                        suffix={searchQuery ? (
+                          <CloseCircleOutlined
+                            style={{ color: token.colorTextQuaternary, cursor: "pointer" }}
+                            onClick={() => { setSearchQuery(""); setCurrentSearchIdx(1); }}
+                          />
+                        ) : null}
+                      />
+                      <Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                        {searchQuery ? `${currentSearchIdx}/${searchTotal}` : "0/0"}
+                      </Text>
+                      <Button size="small" onClick={handleSearchPrev} disabled={searchTotal === 0}>▲</Button>
+                      <Button size="small" onClick={handleSearchNext} disabled={searchTotal === 0}>▼</Button>
+                      <Input
+                        placeholder="替换为..."
+                        value={replaceText}
+                        onChange={(e) => setReplaceText(e.target.value)}
+                        onPressEnter={handleReplace}
+                        size="small"
+                        style={{ width: 140 }}
+                      />
+                      <Button size="small" onClick={handleReplace} disabled={searchTotal === 0}>替换</Button>
+                      <Button size="small" onClick={handleReplaceAll} disabled={searchTotal === 0}>全部替换</Button>
+                      <Button size="small" type="text" icon={<CloseOutlined />} onClick={closeSearch} />
+                    </Space>
+                  </div>
+                )}
                 {/* Markdown 工具栏 */}
                 <div
                   style={{
@@ -653,6 +871,7 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
               </div>
             )}
             <div
+              ref={contentRef}
               style={{
                 flex: 1,
                 display: "flex",
@@ -709,6 +928,36 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
                   ))}
                 </div>
               )}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+              {/* 预览搜索栏 */}
+              {showSearch && (
+                <div style={{ padding: "6px 12px", borderBottom: `1px solid ${token.colorBorderSecondary}`, background: token.colorFillQuaternary }}>
+                  <Space size="small">
+                    <Input
+                      ref={searchInputRef}
+                      placeholder="搜索..."
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentSearchIdx(1); }}
+                      onPressEnter={handleSearchNext}
+                      size="small"
+                      style={{ width: 200 }}
+                      prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
+                      suffix={searchQuery ? (
+                        <CloseCircleOutlined
+                          style={{ color: token.colorTextQuaternary, cursor: "pointer" }}
+                          onClick={() => { setSearchQuery(""); setCurrentSearchIdx(1); }}
+                        />
+                      ) : null}
+                    />
+                    <Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                      {searchQuery ? `${currentSearchIdx}/${searchTotal}` : "0/0"}
+                    </Text>
+                    <Button size="small" onClick={handleSearchPrev} disabled={searchTotal === 0}>▲</Button>
+                    <Button size="small" onClick={handleSearchNext} disabled={searchTotal === 0}>▼</Button>
+                    <Button size="small" type="text" icon={<CloseOutlined />} onClick={closeSearch} />
+                  </Space>
+                </div>
+              )}
               {/* 预览内容 */}
               <div
                 ref={previewRef}
@@ -724,6 +973,7 @@ const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttac
                 ) : (
                   <Text type="secondary">暂无内容, 点击「编辑」开始书写</Text>
                 )}
+              </div>
               </div>
             </div>
           </>

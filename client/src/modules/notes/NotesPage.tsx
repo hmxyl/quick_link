@@ -571,7 +571,7 @@ const NotesPage: React.FC = () => {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 96px)", minHeight: 480 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 96px)", minHeight: 480, width: "100%" }}>
       {topBar}
 
       <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
