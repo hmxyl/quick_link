@@ -13,14 +13,16 @@ router.use(authMiddleware);
 // 笔记树
 router.get("/", noteController.list);
 router.post("/", noteController.create);
-router.put("/:id", noteController.update);
 router.delete("/trash", noteController.emptyTrash);
+router.get("/typora/check", noteController.checkTypora);
+router.put("/:id", noteController.update);
 router.delete("/:id", noteController.remove);
 router.post("/:id/restore", noteController.restore);
 router.post("/:id/move", noteController.move);
 router.delete("/:id/permanent", noteController.removePermanent);
 router.get("/:id/file-path", noteController.getFilePath);
 router.post("/:id/open-folder", noteController.openFolder);
+router.post("/:id/open-in-typora", noteController.openInTypora);
 
 // 数据操作
 router.post("/wipe", noteController.wipe);

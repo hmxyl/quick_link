@@ -18,6 +18,7 @@ import {
 import type { TreeDataNode } from "antd";
 import {
   CopyOutlined,
+  EditOutlined,
   FileMarkdownOutlined,
   FolderOutlined,
   FolderOpenOutlined,
@@ -73,8 +74,17 @@ const NotesPage: React.FC = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(
     () => localStorage.getItem(PANEL_COLLAPSED_KEY) === "1"
   );
+  // Typora 是否已安装 (页面加载时检测一次)
+  const [typoraInstalled, setTyporaInstalled] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const treeRef = useRef<any>(null);
+
+  // 检测 Typora 是否安装
+  useEffect(() => {
+    noteApi.checkTypora().then((r) => {
+      if (r.success) setTyporaInstalled(!!r.data?.installed);
+    }).catch(() => { /* 忽略 */ });
+  }, []);
 
   const active = useMemo(() => notes.filter((n) => !n.deletedAt), [notes]);
   const trash = useMemo(
@@ -275,12 +285,15 @@ const NotesPage: React.FC = () => {
       items.push({ type: "divider" });
       items.push({ key: "rename", icon: <FileMarkdownOutlined />, label: "重命名" });
       items.push({ key: "move", icon: <SendOutlined />, label: "移动到" });
+      if (node.type === "note" && typoraInstalled) {
+        items.push({ key: "openInTypora", icon: <EditOutlined />, label: "在 Typora 中编辑" });
+      }
       items.push({ key: "copyPath", icon: <CopyOutlined />, label: "复制文件路径" });
       items.push({ key: "openFolder", icon: <FolderOpenOutlined />, label: "打开于资源管理器" });
       items.push({ key: "delete", icon: <DeleteOutlined />, label: "删除", danger: true });
     }
     return items;
-  }, [ctxMenu, notes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ctxMenu, notes, typoraInstalled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCtxMenuClick = useCallback(({ key }: { key: string }) => {
     if (!ctxMenu) return;
@@ -310,6 +323,14 @@ const NotesPage: React.FC = () => {
         if (node) {
           noteApi.openFolder(node._id).then((r) => {
             if (r.success) message.success("已打开所在文件夹");
+            else message.error(r.error || "打开失败");
+          }).catch(() => message.error("打开失败"));
+        }
+        break;
+      case "openInTypora":
+        if (node) {
+          noteApi.openInTypora(node._id).then((r) => {
+            if (r.success) message.success("已在 Typora 中打开");
             else message.error(r.error || "打开失败");
           }).catch(() => message.error("打开失败"));
         }

@@ -70,6 +70,8 @@
 | DELETE | /api/notes/:id/permanent | 彻底删除（含后代及附件文件） | Yes |
 | GET | /api/notes/:id/file-path | 返回笔记文件绝对路径（桌面版生效） | Yes |
 | POST | /api/notes/:id/open-folder | 在系统文件管理器中打开笔记所在文件夹（跨平台：Win `explorer.exe`；macOS `open`；Linux `xdg-open`；文件节点打开其父目录，文件夹节点打开自身；桌面版生效） | Yes |
+| GET | /api/notes/typora/check | 检查 Typora 是否已安装（返回 `{installed, path}`，桌面版生效） | Yes |
+| POST | /api/notes/:id/open-in-typora | 用 Typora 打开笔记文件（跨平台查找 Typora 路径，桌面版生效；文件夹不可用 Typora 打开） | Yes |
 | DELETE | /api/notes/trash | 清空回收站 | Yes |
 | POST | /api/notes/wipe | 数据清空（全部笔记+附件+排序记录） | Yes |
 | GET | /api/notes/export | 导出 zip | Yes |
@@ -98,7 +100,7 @@ quicklink-notes-YYYY-MM-DD.zip
 - **左面板收起/展开**：面板顶部折叠按钮（MenuFold/MenuUnfold 图标，与主侧栏一致）可将面板从 300px 收起到 48px（仅留按钮），树/搜索/切换控件全部隐藏，编辑区获得更大空间；状态存 `localStorage[ql-note-panel-collapsed]`，刷新后保持。
 - **拖拽排序/移动**：文件夹树开启 `draggable`（搜索过滤时禁用避免索引错位）；同级拖动调整顺序（仅更新 `note_orders` 不动磁盘），拖到文件夹上/内部则跨文件夹移动（重名自动追加序号，附件 noteId 与排序记录同步重映射，选中/高亮/展开状态按新路径前缀替换）；禁止拖入自身后代，拖入目标文件夹自动展开。
 - **搜索**：按标题或正文内容过滤（不区分大小写、输入即过滤），保留命中项祖先链。
-- **新建**：「+」下拉与右键空白处均可在第一级目录新建文档/文件夹（支持任意多个根级目录）；右键节点提供新建文档/子层文件夹/子层文件/重命名/移动到/复制文件路径/打开于资源管理器/删除。「复制文件路径」调用 `getFilePath` API 获取笔记文件绝对路径并写入剪贴板（桌面版下可直接定位文件）；「打开于资源管理器」调用 `openFolder` API 在系统文件管理器中打开笔记所在目录（跨平台：Win `explorer.exe`、macOS `open`、Linux `xdg-open`，文件节点打开其父目录，文件夹节点打开自身）。
+- **新建**：「+」下拉与右键空白处均可在第一级目录新建文档/文件夹（支持任意多个根级目录）；右键节点提供新建文档/子层文件夹/子层文件/重命名/移动到/在 Typora 中编辑（仅笔记节点且 Typora 已安装时显示）/复制文件路径/打开于资源管理器/删除。「复制文件路径」调用 `getFilePath` API 获取笔记文件绝对路径并写入剪贴板（桌面版下可直接定位文件）；「打开于资源管理器」调用 `openFolder` API 在系统文件管理器中打开笔记所在目录（跨平台：Win `explorer.exe`、macOS `open`、Linux `xdg-open`，文件节点打开其父目录，文件夹节点打开自身）。「在 Typora 中编辑」调用 `openInTypora` API 用 Typora 打开笔记 `.md` 文件（仅笔记节点显示，页面加载时调用 `checkTypora` 检测安装状态，未安装时隐藏该菜单项；服务端跨平台查找 Typora 路径：Win 检查 Program Files/LOCALAPPDATA/`where` 命令、macOS 检查 `/Applications`/`mdfind`、Linux 使用 `which`）。
 - **键盘导航**：↑/↓ 在可见节点间移动选中（文件夹仅高亮不打开预览）；← 收起已展开文件夹或跳回父级；→ 展开文件夹或进入首个子节点；输入框聚焦/弹窗打开时不生效。
 - **重命名**：antd Modal + Input 弹窗（Electron 不实现 `window.prompt`）。
 - **移动到**：右键菜单「移动到」打开目标文件夹选择弹窗（树形选择器，排除自身及其后代），选择后调用 move API 完成跨文件夹移动（重名自动追加序号，附件 noteId 与排序记录同步重映射）。
@@ -120,6 +122,7 @@ quicklink-notes-YYYY-MM-DD.zip
 - **图片尺寸存储约定**：标准 Markdown 无图片宽高语法，而 Milkdown Crepe 块级图片节点仅有 {src, caption, ratio} 属性（alt 会被丢弃为 ratio、组件不支持像素尺寸），因此尺寸编码进图片 title（`ql-size:WxH` 后缀，单位像素，宽高均可省略其一，如 `ql-size:640x` / `ql-size:x180`）：① 所见即所得：inline 图片存 title、块级图片存 caption（↔ title），由 `MilkdownEditor` 的 ProseMirror 插件解析并在 DOM 上注入 `style.width/height`（每次文档更新与图片 load 事件后按 src 配对应用，覆盖 Crepe 组件按自然尺寸重置的行为；inline 图片的 title 悬停提示同时剥除尺寸代码）；② 源码+预览与只读预览：`NoteViewer` 的 marked 自定义渲染器解析 title 输出 `<img width/height>`，尺寸代码不进入 title 属性；③ 往返稳定：该编码经 remark 序列化后原样保留，不影响标准 Markdown 兼容性。块级图片弹出 Crepe 自带的说明编辑框时会显示尺寸代码（接受的折衷）。
 - **大纲侧边栏**：预览模式下用户常需快速定位长文档中的章节；从 Markdown 标题自动提取大纲（H1~H6 按层级缩进），点击跳转（标题 ID 由 slug 生成，与渲染器共用逻辑保证一致）；代码围栏内的标题排除；开关状态持久化（默认显示），不影响编辑模式（编辑时隐藏）。
 - **笔记内搜索 DOM 高亮方案**：预览模式搜索使用 `document.createTreeWalker` 遍历文本节点，按匹配词拆分并用 `<mark class="ql-search-hl">` 包裹（当前命中追加 `ql-search-hl-current`），替换时直接操作 DOM 父节点；编辑模式搜索基于字符串匹配（`draft` 状态），替换直接修改 draft 字符串。两种模式共用搜索栏 UI 与快捷键，切换笔记时自动清除高亮并重置状态。
+- **Typora 外部编辑集成**：用户可能希望用专业 Markdown 编辑器（Typora）打开笔记 `.md` 文件进行编辑；服务端 `findTypora()` 跨平台探测 Typora 可执行路径（Win: 常见安装目录 + `where`；macOS: `/Applications` + `mdfind`；Linux: `which`），客户端页面加载时调用 `checkTypora` 缓存安装状态，右键菜单仅在 Typora 已安装且右键笔记节点时显示「在 Typora 中编辑」；路由 `GET /typora/check` 注册在 `PUT /:id` 之前，避免 Express 将 `typora` 误匹配为 `:id` 路径参数。
 - **表格宽度 100%**：Markdown 预览表格样式 `width: 100%`（早期 `auto` 导致窄内容表格不撑满容器，改为全宽后视觉更稳定）。
 - **表格单元格内换行（`<br />`）双向转换**：GFM 表格单元格内换行的标准 Markdown 语法是 `<br />`，但 Milkdown 默认行为会导致编辑保存后换行丢失。原因有二：① Parse 侧：preset-commonmark 的 `remark-preserve-empty-line` 插件会删除 mdast 中所有 `<br />` html 节点（不区分是否位于表格单元格），若自定义转换插件在其后运行则单元格内 `<br />` 已被清空；② Serialize 侧：Milkdown 序列化器会把单元格内容包成 `paragraph` 节点（`tableCell > paragraph > break`），导致 break 节点的直接父级是 `paragraph` 而非 `tableCell`。修复：① Parse 侧：自定义 remark 插件必须**置顶注册**（排在所有内置转换器之前），先把单元格内 `<br />` 转成 `break` 节点，preserve 插件随后只清理段落级 `<br />`；② Serialize 侧：自定义 break handler 通过 `state.stack.includes("tableCell")` 检查祖先链（不仅看直接父级），单元格内输出 `<br />`，其他位置沿用默认 handler（行尾 `\` 换行）。Ctrl+Enter 在单元格内插入 hardbreak 节点（绕过 GFM 表格 keymap 的退出表格行为），序列化时同样走此 handler。
 

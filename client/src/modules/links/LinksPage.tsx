@@ -473,18 +473,6 @@ const LinksPage: React.FC = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="粘贴网址后回车，快速导入..."
-          prefix={<ThunderboltOutlined />}
-          value={quickUrl}
-          onChange={(e) => setQuickUrl(e.target.value)}
-          onPressEnter={handleQuickImport}
-          disabled={quickLoading}
-          size="large"
-          allowClear
-        />
-      </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
         <Space wrap>
           <Input.Search
@@ -549,6 +537,18 @@ const LinksPage: React.FC = () => {
             onChange={handleImportFile}
           />
         </Space>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <Input
+          placeholder="粘贴网址后回车，快速导入..."
+          prefix={<ThunderboltOutlined />}
+          value={quickUrl}
+          onChange={(e) => setQuickUrl(e.target.value)}
+          onPressEnter={handleQuickImport}
+          disabled={quickLoading}
+          size="large"
+          allowClear
+        />
       </div>
 
       {activeTag && (

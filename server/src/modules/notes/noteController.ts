@@ -603,3 +603,74 @@ export function openFolder(req: AuthRequest, res: Response) {
   else spawn("xdg-open", [target], opts).unref();
   res.json({ success: true, message: "已打开所在文件夹" });
 }
+
+// ---- Typora 编辑支持 ----
+
+/** 查找 Typora 可执行文件路径 (找到返回绝对路径, 未找到返回 null) */
+function findTypora(): string | null {
+  const { execSync } = require("child_process") as typeof import("child_process");
+  if (process.platform === "win32") {
+    // Windows: 检查常见安装路径
+    const candidates = [
+      path.join(process.env["ProgramFiles"] || "C:\\Program Files", "Typora", "Typora.exe"),
+      path.join(process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)", "Typora", "Typora.exe"),
+      path.join(process.env["LOCALAPPDATA"] || "", "Programs", "Typora", "Typora.exe"),
+    ];
+    for (const p of candidates) {
+      if (p && fs.existsSync(p)) return p;
+    }
+    // 尝试 where 命令
+    try {
+      const result = execSync("where Typora.exe 2>nul", { encoding: "utf8" }).trim();
+      if (result) return result.split("\n")[0].trim();
+    } catch { /* 未找到 */ }
+  } else if (process.platform === "darwin") {
+    // macOS: 检查 /Applications
+    const appPath = "/Applications/Typora.app/Contents/MacOS/Typora";
+    if (fs.existsSync(appPath)) return appPath;
+    try {
+      const result = execSync("which Typora 2>/dev/null || mdfind -name 'Typora.app' 2>/dev/null | head -1", { encoding: "utf8" }).trim();
+      if (result) {
+        if (result.endsWith(".app")) return `${result}/Contents/MacOS/Typora`;
+        return result;
+      }
+    } catch { /* 未找到 */ }
+  } else {
+    // Linux: 使用 which
+    try {
+      const result = execSync("which typora 2>/dev/null", { encoding: "utf8" }).trim();
+      if (result) return result;
+    } catch { /* 未找到 */ }
+  }
+  return null;
+}
+
+// GET /api/notes/typora/check  检查 Typora 是否已安装
+export function checkTypora(_req: AuthRequest, res: Response) {
+  const typoraPath = findTypora();
+  res.json({ success: true, data: { installed: !!typoraPath, path: typoraPath } });
+}
+
+// POST /api/notes/:id/open-in-typora  使用 Typora 打开笔记
+export function openInTypora(req: AuthRequest, res: Response) {
+  const userId = req.userId!;
+  const rel = req.params.id;
+  let abs: string;
+  try {
+    abs = absOf(userId, rel);
+  } catch {
+    return res.status(400).json({ success: false, error: "非法路径" });
+  }
+  if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "笔记文件不存在" });
+  // 文件夹不能用 Typora 打开
+  if (fs.statSync(abs).isDirectory()) {
+    return res.status(400).json({ success: false, error: "无法用 Typora 打开文件夹" });
+  }
+  const typoraPath = findTypora();
+  if (!typoraPath) {
+    return res.status(404).json({ success: false, error: "未检测到 Typora, 请先安装 Typora" });
+  }
+  const opts = { detached: true, stdio: "ignore" as const };
+  spawn(typoraPath, [abs], opts).unref();
+  res.json({ success: true, message: "已在 Typora 中打开" });
+}
