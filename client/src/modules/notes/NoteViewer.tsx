@@ -151,7 +151,12 @@ interface Props {
   onAttachmentsChanged: () => void;
 }
 
-const NoteViewer: React.FC<Props> = ({ note, attachments, onNoteChanged, onAttachmentsChanged }) => {
+const NoteViewer: React.FC<Props> = ({
+  note,
+  attachments,
+  onNoteChanged,
+  onAttachmentsChanged,
+}) => {
   const { token } = theme.useToken();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.content || "");

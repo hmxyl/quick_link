@@ -14,7 +14,6 @@ router.use(authMiddleware);
 router.get("/", noteController.list);
 router.post("/", noteController.create);
 router.delete("/trash", noteController.emptyTrash);
-router.get("/typora/check", noteController.checkTypora);
 router.put("/:id", noteController.update);
 router.delete("/:id", noteController.remove);
 router.post("/:id/restore", noteController.restore);

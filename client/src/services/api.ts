@@ -203,10 +203,6 @@ export const noteApi = {
   openFolder: (id: string) =>
     api.post<ApiResponse>(`/notes/${encId(id)}/open-folder`).then((r) => r.data),
 
-  // 检查 Typora 是否已安装
-  checkTypora: () =>
-    api.get<ApiResponse<{ installed: boolean; path: string | null }>>("/notes/typora/check").then((r) => r.data),
-
   // 使用 Typora 打开笔记 (桌面版生效)
   openInTypora: (id: string) =>
     api.post<ApiResponse>(`/notes/${encId(id)}/open-in-typora`).then((r) => r.data),

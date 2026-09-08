@@ -610,7 +610,6 @@ export function openFolder(req: AuthRequest, res: Response) {
 function findTypora(): string | null {
   const { execSync } = require("child_process") as typeof import("child_process");
   if (process.platform === "win32") {
-    // Windows: 检查常见安装路径
     const candidates = [
       path.join(process.env["ProgramFiles"] || "C:\\Program Files", "Typora", "Typora.exe"),
       path.join(process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)", "Typora", "Typora.exe"),
@@ -619,13 +618,28 @@ function findTypora(): string | null {
     for (const p of candidates) {
       if (p && fs.existsSync(p)) return p;
     }
-    // 尝试 where 命令
+    // 从 Windows 注册表查找安装路径 (支持自定义安装位置)
+    try {
+      const { execSync: exec } = require("child_process") as typeof import("child_process");
+      const regPaths = [
+        "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+      ];
+      for (const regPath of regPaths) {
+        const result = exec(`reg query "${regPath}" /s /f "Typora" /reg:64 2>nul`, { encoding: "utf8" });
+        const locMatch = result.match(/InstallLocation\s+REG_SZ\s+(.+)/i);
+        if (locMatch) {
+          const exe = path.join(locMatch[1].trim(), "Typora.exe");
+          if (fs.existsSync(exe)) return exe;
+        }
+      }
+    } catch { /* 注册表查询失败 */ }
     try {
       const result = execSync("where Typora.exe 2>nul", { encoding: "utf8" }).trim();
       if (result) return result.split("\n")[0].trim();
     } catch { /* 未找到 */ }
   } else if (process.platform === "darwin") {
-    // macOS: 检查 /Applications
     const appPath = "/Applications/Typora.app/Contents/MacOS/Typora";
     if (fs.existsSync(appPath)) return appPath;
     try {
@@ -636,19 +650,12 @@ function findTypora(): string | null {
       }
     } catch { /* 未找到 */ }
   } else {
-    // Linux: 使用 which
     try {
       const result = execSync("which typora 2>/dev/null", { encoding: "utf8" }).trim();
       if (result) return result;
     } catch { /* 未找到 */ }
   }
   return null;
-}
-
-// GET /api/notes/typora/check  检查 Typora 是否已安装
-export function checkTypora(_req: AuthRequest, res: Response) {
-  const typoraPath = findTypora();
-  res.json({ success: true, data: { installed: !!typoraPath, path: typoraPath } });
 }
 
 // POST /api/notes/:id/open-in-typora  使用 Typora 打开笔记
@@ -662,7 +669,6 @@ export function openInTypora(req: AuthRequest, res: Response) {
     return res.status(400).json({ success: false, error: "非法路径" });
   }
   if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "笔记文件不存在" });
-  // 文件夹不能用 Typora 打开
   if (fs.statSync(abs).isDirectory()) {
     return res.status(400).json({ success: false, error: "无法用 Typora 打开文件夹" });
   }

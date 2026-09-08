@@ -74,17 +74,8 @@ const NotesPage: React.FC = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(
     () => localStorage.getItem(PANEL_COLLAPSED_KEY) === "1"
   );
-  // Typora 是否已安装 (页面加载时检测一次)
-  const [typoraInstalled, setTyporaInstalled] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const treeRef = useRef<any>(null);
-
-  // 检测 Typora 是否安装
-  useEffect(() => {
-    noteApi.checkTypora().then((r) => {
-      if (r.success) setTyporaInstalled(!!r.data?.installed);
-    }).catch(() => { /* 忽略 */ });
-  }, []);
 
   const active = useMemo(() => notes.filter((n) => !n.deletedAt), [notes]);
   const trash = useMemo(
@@ -285,15 +276,15 @@ const NotesPage: React.FC = () => {
       items.push({ type: "divider" });
       items.push({ key: "rename", icon: <FileMarkdownOutlined />, label: "重命名" });
       items.push({ key: "move", icon: <SendOutlined />, label: "移动到" });
-      if (node.type === "note" && typoraInstalled) {
-        items.push({ key: "openInTypora", icon: <EditOutlined />, label: "在 Typora 中编辑" });
+      if (node.type === "note") {
+        items.push({ key: "openInTypora", icon: <EditOutlined />, label: "打开于 Typora" });
       }
       items.push({ key: "copyPath", icon: <CopyOutlined />, label: "复制文件路径" });
       items.push({ key: "openFolder", icon: <FolderOpenOutlined />, label: "打开于资源管理器" });
       items.push({ key: "delete", icon: <DeleteOutlined />, label: "删除", danger: true });
     }
     return items;
-  }, [ctxMenu, notes, typoraInstalled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ctxMenu, notes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCtxMenuClick = useCallback(({ key }: { key: string }) => {
     if (!ctxMenu) return;
