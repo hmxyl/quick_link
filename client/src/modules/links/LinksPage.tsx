@@ -473,15 +473,17 @@ const LinksPage: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <Input.Search
+          placeholder="搜索链接..."
+          allowClear
+          onSearch={(v) => { setSearch(v); setPage(1); }}
+          style={{ flex: 1 }}
+          prefix={<SearchOutlined />}
+        />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
         <Space wrap>
-          <Input.Search
-            placeholder="搜索链接..."
-            allowClear
-            onSearch={(v) => { setSearch(v); setPage(1); }}
-            style={{ width: 240 }}
-            prefix={<SearchOutlined />}
-          />
           <Select
             placeholder="标签筛选"
             allowClear
