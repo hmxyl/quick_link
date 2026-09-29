@@ -11,7 +11,8 @@ export interface Link {
   title: string;
   description?: string;
   icon?: string;
-  tags: string[];
+  tag?: string;          // 单个标签名 (新字段)
+  tags?: string[];       // 旧字段, 兼容已有数据
   isFavorite: boolean;
   isArchived: boolean;
   clickCount: number;
@@ -39,6 +40,7 @@ export interface Tag {
   _id: string;
   name: string;
   color?: string;
+  columns?: number;    // 每行展示链接数, 默认 3
   createdAt: string;
 }
 
@@ -97,7 +99,8 @@ export interface CreateLinkRequest {
   title?: string;
   description?: string;
   icon?: string;
-  tags?: string[];
+  tag?: string;        // 单个标签名
+  tags?: string[];     // 兼容旧接口
   accounts?: LinkAccountInput[];
 }
 

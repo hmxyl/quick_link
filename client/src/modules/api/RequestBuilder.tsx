@@ -1,6 +1,6 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Button, Input, Select, Space, Switch, Tabs } from "antd";
-import { PlusOutlined, DeleteOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined, CopyOutlined, FormatPainterOutlined, ImportOutlined } from "@ant-design/icons";
 import type { KeyValueEntry } from "../../types";
 
 const { TextArea } = Input;
@@ -31,6 +31,7 @@ interface Props {
   onAuthConfigChange: (c: Record<string, string>) => void;
   onSend: () => void;
   onCopyCurl: () => void;
+  onImportCurl: () => void;
 }
 
 // 通用 KV 表格编辑器
@@ -86,7 +87,7 @@ const RequestBuilder: React.FC<Props> = ({
   requestName, method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig,
   envVars,
   onRequestNameChange, onMethodChange, onUrlChange, onHeadersChange, onQueryParamsChange, onCookiesChange,
-  onBodyTypeChange, onBodyChange, onAuthTypeChange, onAuthConfigChange, onSend, onCopyCurl,
+  onBodyTypeChange, onBodyChange, onAuthTypeChange, onAuthConfigChange, onSend, onCopyCurl, onImportCurl,
 }) => {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -94,6 +95,18 @@ const RequestBuilder: React.FC<Props> = ({
       onSend();
     }
   }, [onSend]);
+
+  // 文本框自动高度: 每次渲染后按内容撑高, 避免文本框自身出现滚动条
+  const bodyTextareaRef = useRef<any>(null);
+  useEffect(() => {
+    const inst = bodyTextareaRef.current;
+    const el: HTMLTextAreaElement | null =
+      inst?.resizableTextArea?.textArea ?? inst?.input ?? inst?.nativeElement ?? null;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  });
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
@@ -127,12 +140,16 @@ const RequestBuilder: React.FC<Props> = ({
         <Button icon={<CopyOutlined />} onClick={onCopyCurl}>
           cURL
         </Button>
+        <Button icon={<ImportOutlined />} onClick={onImportCurl}>
+          导入 cURL
+        </Button>
       </div>
 
       {/* Tabs: Params / Headers / Body / Auth */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div className="api-tabs-scroll" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <Tabs
           size="small"
+          defaultActiveKey="body"
           items={[
             {
               key: "params",
@@ -196,11 +213,13 @@ const RequestBuilder: React.FC<Props> = ({
                   </Space>
                   {bodyType !== "none" && (
                     <TextArea
+                      ref={bodyTextareaRef}
+                      className="api-body-textarea"
                       value={body}
                       onChange={e => onBodyChange(e.target.value)}
                       placeholder={bodyType === "json" ? '{\n  "key": "value"\n}' : "请求体内容..."}
                       rows={8}
-                      style={{ fontFamily: bodyType === "json" ? "var(--ql-font-family, monospace)" : undefined }}
+                      style={{ fontFamily: bodyType === "json" ? "var(--ql-font-family, monospace)" : undefined, resize: "none" }}
                     />
                   )}
                 </div>
@@ -250,6 +269,27 @@ const RequestBuilder: React.FC<Props> = ({
           ]}
         />
       </div>
+      <style>{`
+        .api-tabs-scroll .ant-tabs {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          min-height: 0;
+        }
+        .api-tabs-scroll .ant-tabs-nav {
+          flex-shrink: 0;
+          margin-bottom: 0;
+        }
+        .api-tabs-scroll .ant-tabs-content-holder {
+          flex: 1;
+          overflow: auto;
+          min-height: 0;
+        }
+        /* 文本框不出现独立滚动条, 滚动统一由参数区域处理 */
+        .api-body-textarea {
+          overflow: hidden !important;
+        }
+      `}</style>
     </div>
   );
 };

@@ -1,38 +1,93 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Table, Button, Modal, Form, Input, Tag, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Radio } from "antd";
+import { Button, Modal, Form, Input, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Card } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
-  ThunderboltOutlined, KeyOutlined, CopyOutlined, FolderOutlined, ExportOutlined,
-  DownloadOutlined, UploadOutlined, TagsOutlined, SyncOutlined, StarOutlined,
+  KeyOutlined, CopyOutlined, ExportOutlined,
+  DownloadOutlined, UploadOutlined, TagsOutlined, SyncOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { linkApi, tagApi, customIconApi } from "../../services/api";
+import { linkApi, customIconApi } from "../../services/api";
 import type { CustomIcon } from "../../services/api";
-import { useSearchParams } from "react-router-dom";
 import { LinkIcon, IconPicker } from "./LinkIcon";
 import TagManager from "./TagManager";
 import type { Link, Tag as TagType, AccountSecrets } from "../../types";
 
 const { Text } = Typography;
 
+// 链接卡片悬浮 CSS (模块级一次性注入, 避免每次渲染创建新 style 标签)
+const LINK_CARD_CSS = `
+  .ant-card-hoverable:hover .link-card-actions {
+    opacity: 1 !important;
+  }
+`;
+if (typeof document !== "undefined" && !document.querySelector('[data-ql-links]')) {
+  const style = document.createElement("style");
+  style.setAttribute("data-ql-links", "");
+  style.textContent = LINK_CARD_CSS;
+  document.head.appendChild(style);
+}
+
+// 链接卡片悬浮设置按钮 (提取到组件外部, 避免每次渲染时重新定义导致完全卸载/重建)
+interface LinkSettingsProps {
+  link: Link;
+  customIcons: CustomIcon[];
+  onCopyAndOpen: (url: string) => void;
+  onViewSecrets: (id: string) => void;
+  onAddToIconLibrary: (link: Link) => void;
+  onEdit: (link: Link) => void;
+  onDelete: (id: string) => void;
+}
+
+const LinkSettings: React.FC<LinkSettingsProps> = ({
+  link,
+  customIcons,
+  onCopyAndOpen,
+  onViewSecrets,
+  onAddToIconLibrary,
+  onEdit,
+  onDelete,
+}) => {
+  const hasUrlIcon = link.icon && /^https?:\/\//i.test(link.icon);
+  const isInLibrary = hasUrlIcon && customIcons.some((c) => c.url === link.icon);
+  return (
+    <Space size={4} wrap>
+      {link.url && (
+        <Tooltip title="复制并打开">
+          <Button size="small" type="text" icon={<ExportOutlined />} onClick={(e) => { e.stopPropagation(); onCopyAndOpen(link.url); }} />
+        </Tooltip>
+      )}
+      <Tooltip title="账号管理">
+        <Button size="small" type="text" icon={<KeyOutlined />} onClick={(e) => { e.stopPropagation(); onViewSecrets(link._id); }} />
+      </Tooltip>
+      {hasUrlIcon && !isInLibrary && (
+        <Tooltip title="加入图标库">
+          <Button size="small" type="text" icon={<SyncOutlined />} onClick={(e) => { e.stopPropagation(); onAddToIconLibrary(link); }} />
+        </Tooltip>
+      )}
+      <Tooltip title="编辑">
+        <Button size="small" type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEdit(link); }} />
+      </Tooltip>
+      <Popconfirm title="确定删除此链接？" onConfirm={(e) => { e?.stopPropagation(); onDelete(link._id); }}>
+        <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+      </Popconfirm>
+    </Space>
+  );
+};
+
 const LinksPage: React.FC = () => {
   const { token } = theme.useToken();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const urlTag = searchParams.get("tag") || "";
 
-  const [links, setLinks] = useState<Link[]>([]);
-  const [tags, setTags] = useState<TagType[]>([]);
+  const [groupedLinks, setGroupedLinks] = useState<Record<string, Link[]>>({});
+  const [tagList, setTagList] = useState<TagType[]>([]);
+  const [tagColumns, setTagColumns] = useState<Record<string, number>>({});
   const [customIcons, setCustomIcons] = useState<CustomIcon[]>([]);
   const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [activeTag, setActiveTag] = useState(urlTag);
+  // 防抖搜索值: 输入停顿 300ms 后才触发 API 请求
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<Link | null>(null);
-  const [quickUrl, setQuickUrl] = useState("");
-  const [quickLoading, setQuickLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form] = Form.useForm();
@@ -46,38 +101,47 @@ const LinksPage: React.FC = () => {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [addForm] = Form.useForm();
 
-  // 批量选择 + 批量设标签
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [batchTagOpen, setBatchTagOpen] = useState(false);
-  const [batchTagMode, setBatchTagMode] = useState<"set" | "add" | "remove">("set");
-  const [batchTagForm] = Form.useForm();
-
   // URL 去重搜索
   const [duplicateLinks, setDuplicateLinks] = useState<Link[]>([]);
   const urlSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadLinks = async (p = page) => {
+  // 防抖: 输入停顿 300ms 后同步到 debouncedSearch
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const loadAllLinks = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string> = { page: String(p), limit: "20" };
-      if (search) params.search = search;
-      if (activeTag) params.tag = activeTag;
-      const res = await linkApi.list(params);
-      setLinks(res.data || []);
-      setTotal(res.total || 0);
+      const res = await linkApi.listAll();
+      if (res.success && res.data) {
+        // 搜索过滤
+        if (debouncedSearch) {
+          const kw = debouncedSearch.toLowerCase();
+          const filtered: Record<string, Link[]> = {};
+          for (const [tag, links] of Object.entries(res.data)) {
+            const matched = links.filter(
+              (l) =>
+                l.title?.toLowerCase().includes(kw) ||
+                l.url?.toLowerCase().includes(kw) ||
+                l.description?.toLowerCase().includes(kw)
+            );
+            if (matched.length > 0) filtered[tag] = matched;
+          }
+          setGroupedLinks(filtered);
+        } else {
+          setGroupedLinks(res.data);
+        }
+        if (res.tags) setTagList(res.tags);
+        if (res.tagColumns) setTagColumns(res.tagColumns);
+      }
     } catch {
       message.error("加载链接失败");
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadTags = async () => {
-    try {
-      const res = await tagApi.list();
-      setTags(res.data || []);
-    } catch { /* ignore */ }
-  };
+  }, [debouncedSearch]);
 
   const loadCustomIcons = async () => {
     try {
@@ -86,12 +150,8 @@ const LinksPage: React.FC = () => {
     } catch { /* ignore */ }
   };
 
-  useEffect(() => { loadTags(); loadCustomIcons(); }, []);
-  useEffect(() => {
-    // Sync filters from URL search params
-    setActiveTag(searchParams.get("tag") || "");
-  }, [searchParams]);
-  useEffect(() => { loadLinks(); }, [page, search, activeTag]);
+  useEffect(() => { loadCustomIcons(); }, []);
+  useEffect(() => { loadAllLinks(); }, [loadAllLinks]);
 
   // URL 去重搜索: 输入停顿 400ms 后查询已有链接
   const handleUrlChangeForSearch = useCallback((urlValue: string) => {
@@ -104,7 +164,6 @@ const LinksPage: React.FC = () => {
     urlSearchTimer.current = setTimeout(async () => {
       try {
         const res = await linkApi.searchByUrl(trimmed);
-        // 编辑模式下排除自身
         const results = editingLink
           ? (res.data || []).filter((l) => l._id !== editingLink._id)
           : (res.data || []);
@@ -119,53 +178,6 @@ const LinksPage: React.FC = () => {
     return () => { if (urlSearchTimer.current) clearTimeout(urlSearchTimer.current); };
   }, []);
 
-  // 批量删除
-  const handleBatchDelete = async () => {
-    try {
-      const res = await linkApi.batchRemove(selectedRowKeys as string[]);
-      message.success(res.message || `已删除 ${res.data?.count ?? selectedRowKeys.length} 条链接`);
-      setSelectedRowKeys([]);
-      loadLinks();
-    } catch {
-      message.error("批量删除失败");
-    }
-  };
-
-  // 批量设标签
-  const handleBatchTagSubmit = async () => {
-    try {
-      const values = await batchTagForm.validateFields();
-      const res = await linkApi.batchUpdateTags(
-        selectedRowKeys as string[],
-        values.tags || [],
-        batchTagMode
-      );
-      message.success(res.message || "标签已更新");
-      setBatchTagOpen(false);
-      batchTagForm.resetFields();
-      setSelectedRowKeys([]);
-      loadLinks();
-    } catch (err: any) {
-      if (err.response?.data?.error) message.error(err.response.data.error);
-    }
-  };
-
-  const handleQuickImport = async () => {
-    const url = quickUrl.trim();
-    if (!url) return;
-    setQuickLoading(true);
-    try {
-      await linkApi.create({ url });
-      message.success("链接已快速导入");
-      setQuickUrl("");
-      loadLinks();
-    } catch (err: any) {
-      message.error(err.response?.data?.error || "导入失败");
-    } finally {
-      setQuickLoading(false);
-    }
-  };
-
   const handleCreate = () => {
     setEditingLink(null);
     form.resetFields();
@@ -175,14 +187,13 @@ const LinksPage: React.FC = () => {
 
   const handleEdit = (record: Link) => {
     setEditingLink(record);
-    // 先重置整个表单 (清掉上次遗留的账号行), 再回填基础字段; 存量密文不在表单中管理
     form.resetFields();
     form.setFieldsValue({
       url: record.url,
       title: record.title,
       description: record.description,
       icon: record.icon,
-      tags: record.tags,
+      tag: record.tag || (record.tags && record.tags.length > 0 ? record.tags[0] : "其他"),
     });
     setDuplicateLinks([]);
     setModalOpen(true);
@@ -192,7 +203,7 @@ const LinksPage: React.FC = () => {
     try {
       await linkApi.remove(id);
       message.success("链接已删除");
-      loadLinks();
+      loadAllLinks();
     } catch {
       message.error("删除失败");
     }
@@ -212,7 +223,6 @@ const LinksPage: React.FC = () => {
     }
   };
 
-  // 重新拉取账号明细 (增删账号后刷新)
   const refreshSecrets = async () => {
     if (!viewLinkId) return;
     try {
@@ -229,7 +239,7 @@ const LinksPage: React.FC = () => {
       await linkApi.removeAccount(viewLinkId, accountId);
       message.success("账号已删除");
       await refreshSecrets();
-      loadLinks();
+      loadAllLinks();
     } catch {
       message.error("删除账号失败");
     }
@@ -256,13 +266,12 @@ const LinksPage: React.FC = () => {
       setAddAccountOpen(false);
       setEditingAccountId(null);
       await refreshSecrets();
-      loadLinks();
+      loadAllLinks();
     } catch (err: any) {
       if (err.response?.data?.error) message.error(err.response.data.error);
     }
   };
 
-  // 随机生成密码: 16位 a-zA-Z0-9, 首字符为大写字母; 可多次点击替换
   const genPassword = () => {
     const all = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -281,7 +290,7 @@ const LinksPage: React.FC = () => {
       addForm.resetFields();
       setAddAccountOpen(false);
       await refreshSecrets();
-      loadLinks();
+      loadAllLinks();
     } catch (err: any) {
       if (err.response?.data?.error) message.error(err.response.data.error);
     }
@@ -290,8 +299,8 @@ const LinksPage: React.FC = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      const { url, title, description, icon, tags } = values;
-      const payload = { url, title, description, icon, tags };
+      const { url, title, description, icon, tag } = values;
+      const payload = { url, title, description, icon, tag };
 
       if (editingLink) {
         await linkApi.update(editingLink._id, payload);
@@ -302,7 +311,7 @@ const LinksPage: React.FC = () => {
       }
       setModalOpen(false);
       setDuplicateLinks([]);
-      loadLinks();
+      loadAllLinks();
     } catch (err: any) {
       if (err.response?.data?.error) message.error(err.response.data.error);
     }
@@ -323,13 +332,11 @@ const LinksPage: React.FC = () => {
     message.success("地址已复制，并用系统浏览器打开");
   };
 
-  const isLocalFile = (url: string) => url.startsWith("file://");
-
   const handleClearAll = async () => {
     try {
       const res = await linkApi.clearAll();
       message.success(res.message || "数据已清空");
-      loadLinks(1);
+      loadAllLinks();
     } catch {
       message.error("清空失败");
     }
@@ -358,7 +365,6 @@ const LinksPage: React.FC = () => {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      // Accept both export format {data:[...], customIcons:[...], tags:[...]} and plain array / {links:[...]}
       const items: any[] = Array.isArray(parsed)
         ? parsed
         : parsed.data || parsed.links || [];
@@ -370,8 +376,7 @@ const LinksPage: React.FC = () => {
       }
       const res = await linkApi.batchImport(items, importIcons, importTags);
       message.success(res.message || `成功导入 ${res.data?.count ?? items.length} 条链接`);
-      loadLinks(1);
-      loadTags();
+      loadAllLinks();
       loadCustomIcons();
     } catch {
       message.error("导入失败：文件格式无效");
@@ -380,14 +385,12 @@ const LinksPage: React.FC = () => {
     }
   };
 
-  // Add link's favicon to custom icon library
   const handleAddToIconLibrary = async (record: Link) => {
     const icon = record.icon;
     if (!icon || !/^https?:\/\//i.test(icon)) {
       message.warning("该链接没有网址图标");
       return;
     }
-    // Check if already in library
     if (customIcons.some((c) => c.url === icon)) {
       message.info("该图标已在图标库中");
       return;
@@ -401,205 +404,164 @@ const LinksPage: React.FC = () => {
     }
   };
 
-  const columns = [
-    {
-      title: "标题", dataIndex: "title", key: "title", ellipsis: true,
-      render: (title: string, record: Link) => (
-        <span>
-          <LinkIcon icon={record.icon} url={record.url} />
-          <span style={{ marginLeft: 8 }}>{title}</span>
-        </span>
-      ),
-    },
-    {
-      title: "链接", dataIndex: "url", key: "url", ellipsis: true,
-      render: (url: string) => {
-        if (!url) return <Text type="secondary">—</Text>;
-        if (isLocalFile(url)) {
-          return (
-            <span>
-              <FolderOutlined style={{ color: "#faad14", marginRight: 4 }} />
-              <span style={{ color: "#888" }}>{url}</span>
-              <Button
-                size="small"
-                type="text"
-                icon={<CopyOutlined />}
-                onClick={(e) => { e.stopPropagation(); copyToClipboard(url); }}
-                title="复制文件路径"
-              />
-            </span>
-          );
-        }
-        return <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>;
-      },
-    },
-    {
-      title: "标签", dataIndex: "tags", key: "tags",
-      render: (tags: string[]) => tags?.map((t) => <Tag key={t}>{t}</Tag>),
-    },
-    {
-      title: "操作", key: "actions", width: 220,
-      render: (_: any, record: Link) => {
-        const hasUrlIcon = record.icon && /^https?:\/\//i.test(record.icon);
-        const isInLibrary = hasUrlIcon && customIcons.some((c) => c.url === record.icon);
-        return (
-          <Space>
-            {record.url && (
-              <Tooltip title="复制并用系统浏览器打开">
-                <Button
-                  size="small"
-                  icon={<ExportOutlined />}
-                  onClick={() => handleCopyAndOpen(record.url)}
-                />
-              </Tooltip>
-            )}
-            <Tooltip title="账号管理">
-              <Button size="small" icon={<KeyOutlined />} onClick={() => handleViewSecrets(record._id)} />
-            </Tooltip>
-            {hasUrlIcon && !isInLibrary && (
-              <Tooltip title="加入图标库">
-                <Button size="small" icon={<StarOutlined />} onClick={() => handleAddToIconLibrary(record)} />
-              </Tooltip>
-            )}
-            <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-            <Popconfirm title="确定删除此链接？" onConfirm={() => handleDelete(record._id)}>
-              <Button size="small" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
-          </Space>
-        );
-      },
-    },
-  ];
+  // 打开链接
+  const openLink = (link: Link) => {
+    if (!link.url) return;
+    if (window.quicklink?.openExternal) {
+      window.quicklink.openExternal(link.url);
+    } else {
+      window.open(link.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  // 链接卡片设置菜单 (悬浮显示) - 使用外部定义的稳定组件引用
+
+  // 获取所有标签名 (按出现顺序)
+  const tagNames = Object.keys(groupedLinks);
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      {/* 顶部工具栏 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <Input.Search
           placeholder="搜索链接..."
           allowClear
-          onSearch={(v) => { setSearch(v); setPage(1); }}
-          style={{ flex: 1 }}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onSearch={(v) => setSearch(v)}
+          style={{ flex: 1, minWidth: 0 }}
           prefix={<SearchOutlined />}
         />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-        <Space wrap>
-          <Select
-            placeholder="标签筛选"
-            allowClear
-            style={{ width: 140 }}
-            value={activeTag || undefined}
-            onChange={(v) => {
-              const params: Record<string, string> = {};
-              if (v) params.tag = v;
-              setSearchParams(params);
-              setPage(1);
-            }}
-            options={tags.map((t) => ({ label: t.name, value: t.name }))}
-          />
-        </Space>
-        <Space>
-          <Popconfirm
-            title="清空"
-            description="确定要清空所有链接数据吗？此操作不可恢复！"
-            okText="确认清空"
-            okButtonProps={{ danger: true }}
-            onConfirm={handleClearAll}
-          >
-            <Button danger icon={<DeleteOutlined />}>清空</Button>
-          </Popconfirm>
-          <Button icon={<DownloadOutlined />} loading={exportLoading} onClick={handleExport}>导出</Button>
-          <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>导入</Button>
-          <Button icon={<TagsOutlined />} onClick={() => setTagManagerOpen(true)}>标签管理</Button>
-          {selectedRowKeys.length > 0 && (
-            <>
-              <Popconfirm
-                title={`确定删除选中的 ${selectedRowKeys.length} 条链接？`}
-                onConfirm={handleBatchDelete}
-                okText="确定"
-                cancelText="取消"
-              >
-                <Button danger icon={<DeleteOutlined />}>
-                  批量删除 ({selectedRowKeys.length})
-                </Button>
-              </Popconfirm>
-              <Button icon={<TagsOutlined />} type="primary" ghost onClick={() => { setBatchTagMode("set"); batchTagForm.resetFields(); setBatchTagOpen(true); }}>
-                批量设标签 ({selectedRowKeys.length})
-              </Button>
-            </>
-          )}
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            添加链接
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            style={{ display: "none" }}
-            onChange={handleImportFile}
-          />
-        </Space>
-      </div>
-      <div style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="粘贴网址后回车，快速导入..."
-          prefix={<ThunderboltOutlined />}
-          value={quickUrl}
-          onChange={(e) => setQuickUrl(e.target.value)}
-          onPressEnter={handleQuickImport}
-          disabled={quickLoading}
-          size="large"
-          allowClear
+        <Popconfirm
+          title="清空"
+          description="确定要清空所有链接数据吗？此操作不可恢复！"
+          okText="确认清空"
+          okButtonProps={{ danger: true }}
+          onConfirm={handleClearAll}
+        >
+          <Button danger icon={<DeleteOutlined />}>清空</Button>
+        </Popconfirm>
+        <Button icon={<DownloadOutlined />} loading={exportLoading} onClick={handleExport}>导出</Button>
+        <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>导入</Button>
+        <Button icon={<TagsOutlined />} onClick={() => setTagManagerOpen(true)}>标签管理</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          添加链接
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          style={{ display: "none" }}
+          onChange={handleImportFile}
         />
       </div>
 
-      {activeTag && (
-        <div style={{ marginBottom: 16 }}>
-          <Space wrap>
-            <Tag color="blue" closable onClose={() => {
-              setSearchParams({});
-              setPage(1);
-            }}>
-              标签：{activeTag}
-            </Tag>
-          </Space>
+      {/* 标签分组链接卡片 */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 40 }}>
+          <Text type="secondary">加载中...</Text>
         </div>
+      ) : tagNames.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 40 }}>
+          <Text type="secondary">暂无链接，点击上方「添加链接」</Text>
+        </div>
+      ) : (
+        tagNames.map((tagName) => {
+          const links = groupedLinks[tagName];
+          const cols = tagColumns[tagName] ?? 3;
+          const tagInfo = tagList.find((t) => t.name === tagName);
+          const tagColor = tagInfo?.color;
+
+          return (
+            <div key={tagName} style={{ marginBottom: 24 }}>
+              {/* 标签标题 */}
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 12, gap: 8 }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    padding: "2px 12px",
+                    borderRadius: 4,
+                    background: tagColor || token.colorPrimary,
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {tagName}
+                </span>
+                <Text type="secondary" style={{ fontSize: 12 }}>{links.length} 个链接</Text>
+              </div>
+
+              {/* 链接卡片网格 */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                  gap: 12,
+                }}
+              >
+                {links.map((link) => (
+                  <Card
+                    key={link._id}
+                    size="small"
+                    hoverable
+                    onClick={() => openLink(link)}
+                    style={{ cursor: link.url ? "pointer" : "default" }}
+                    styles={{
+                      body: { padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 },
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                      <LinkIcon icon={link.icon} url={link.url} />
+                      <Text
+                        ellipsis
+                        style={{ flex: 1, fontSize: 14 }}
+                        title={link.title || link.url || "(无标题)"}
+                      >
+                        {link.title || link.url || "(无标题)"}
+                      </Text>
+                      {link.hasAccount && (
+                        <Tooltip title="有关联账号">
+                          <KeyOutlined style={{ color: token.colorWarning, fontSize: 12, flexShrink: 0 }} />
+                        </Tooltip>
+                      )}
+                    </div>
+                    {/* 悬浮设置按钮 */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        right: 8,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        opacity: 0,
+                        transition: "opacity 0.2s",
+                        background: token.colorBgElevated,
+                        borderRadius: 6,
+                        padding: "2px 4px",
+                        boxShadow: token.boxShadowSecondary,
+                        border: `1px solid ${token.colorBorderSecondary}`,
+                      }}
+                      className="link-card-actions"
+                    >
+                      <LinkSettings
+                        link={link}
+                        customIcons={customIcons}
+                        onCopyAndOpen={handleCopyAndOpen}
+                        onViewSecrets={handleViewSecrets}
+                        onAddToIconLibrary={handleAddToIconLibrary}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          );
+        })
       )}
 
-      <Table
-        dataSource={links}
-        columns={columns}
-        rowKey="_id"
-        loading={loading}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys),
-        }}
-        pagination={{ current: page, total, pageSize: 20, onChange: setPage }}
-      />
-
-      {/* 批量设标签弹窗 */}
-      <Modal
-        title={`批量设置标签（已选 ${selectedRowKeys.length} 条）`}
-        open={batchTagOpen}
-        onOk={handleBatchTagSubmit}
-        onCancel={() => { setBatchTagOpen(false); batchTagForm.resetFields(); }}
-        okText="确定"
-        cancelText="取消"
-      >
-        <Form form={batchTagForm} layout="vertical">
-          <Form.Item label="操作方式">
-            <Radio.Group value={batchTagMode} onChange={(e) => setBatchTagMode(e.target.value)}>
-              <Radio value="set">覆盖标签</Radio>
-              <Radio value="add">追加标签</Radio>
-              <Radio value="remove">移除标签</Radio>
-            </Radio.Group>
-          </Form.Item>
-          <Form.Item name="tags" label="标签" rules={[{ required: true, message: "请输入或选择标签" }]}>
-            <Select mode="tags" placeholder="输入或选择标签" options={tags.map((t) => ({ label: t.name, value: t.name }))} />
-          </Form.Item>
-        </Form>
-      </Modal>
+      {/* 悬浮显示设置的 CSS 已在模块级注入, 无需重复创建 style 标签 */}
 
       {/* Add/Edit Link Modal */}
       <Modal
@@ -615,8 +577,7 @@ const LinksPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="url" label="链接地址" rules={[{
             validator: (_, value) => {
-              if (!value) return Promise.resolve(); // URL 可为空
-              // Accept: http(s)://, ftp://, file://, local paths (C:\, /), UNC paths (\\)
+              if (!value) return Promise.resolve();
               if (/^(https?|ftp|file):\/\//i.test(value)) return Promise.resolve();
               if (/^[A-Za-z]:[\\/]/.test(value)) return Promise.resolve();
               if (value.startsWith("\\\\")) return Promise.resolve();
@@ -630,7 +591,6 @@ const LinksPage: React.FC = () => {
               onChange={(e) => handleUrlChangeForSearch(e.target.value)}
             />
           </Form.Item>
-          {/* URL 去重提示 */}
           {duplicateLinks.length > 0 && (
             <div style={{ marginBottom: 16, padding: "8px 12px", background: token.colorWarningBg, borderRadius: 6, border: `1px solid ${token.colorWarningBorder}` }}>
               <Space direction="vertical" size={4} style={{ width: "100%" }}>
@@ -638,7 +598,7 @@ const LinksPage: React.FC = () => {
                 {duplicateLinks.slice(0, 5).map((dl) => (
                   <Text key={dl._id} style={{ fontSize: 12 }}>
                     • {dl.title || dl.url || "(无标题)"}
-                    {dl.tags?.length > 0 && <span style={{ marginLeft: 4 }}>{dl.tags.map((t) => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>)}</span>}
+                    {dl.tag && <span style={{ marginLeft: 4 }}><span style={{ padding: "0 6px", borderRadius: 4, background: token.colorPrimaryBg, fontSize: 11 }}>{dl.tag}</span></span>}
                   </Text>
                 ))}
                 {duplicateLinks.length > 5 && <Text type="secondary" style={{ fontSize: 12 }}>...还有 {duplicateLinks.length - 5} 条</Text>}
@@ -653,13 +613,20 @@ const LinksPage: React.FC = () => {
               const currentUrl = getFieldValue("url");
               return (
                 <Form.Item name="icon" label="图标" tooltip="留空则导入时自动分配（网址自动获取官方图标，本地文件使用文件夹图标）">
-                  <IconPicker url={currentUrl} customIcons={customIcons} />
+                  <IconPicker url={currentUrl} />
                 </Form.Item>
               );
             }}
           </Form.Item>
-          <Form.Item name="tags" label="标签">
-            <Select mode="tags" placeholder="选择或输入标签" options={tags.map((t) => ({ label: t.name, value: t.name }))} />
+          <Form.Item name="tag" label="标签">
+            <Select
+              placeholder="选择标签"
+              allowClear
+              options={[
+                { label: "其他", value: "其他" },
+                ...tagList.map((t) => ({ label: t.name, value: t.name })),
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -668,10 +635,10 @@ const LinksPage: React.FC = () => {
       <TagManager
         open={tagManagerOpen}
         onClose={() => setTagManagerOpen(false)}
-        onChanged={loadTags}
+        onChanged={() => { loadAllLinks(); }}
       />
 
-      {/* View Secrets Modal - 多个账号以表格展示, 支持删除/追加 */}
+      {/* View Secrets Modal */}
       <Modal
         title="账号详情"
         open={viewModalOpen}
@@ -681,56 +648,58 @@ const LinksPage: React.FC = () => {
       >
         {secrets && (
           <Space direction="vertical" style={{ width: "100%" }} size="middle">
-            <Table
-              dataSource={secrets.accounts}
-              rowKey="_id"
-              pagination={false}
-              size="small"
-              columns={[
-                {
-                  title: "用户名", dataIndex: "username", key: "username", ellipsis: true,
-                  render: (v: string | null) => v ? (
-                    <Space size={4}>
-                      <Text style={{ maxWidth: 140 }} ellipsis>{v}</Text>
-                      <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(v)} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <Text strong>关联账号</Text>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {secrets.accounts.map((acc) => (
+                <div
+                  key={acc._id}
+                  style={{
+                    border: `1px solid ${token.colorBorderSecondary}`,
+                    borderRadius: 8,
+                    padding: "12px 16px",
+                    background: token.colorFillQuaternary,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <Space size="middle">
+                      {acc.username && (
+                        <Space size={4}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>用户名:</Text>
+                          <Text style={{ maxWidth: 140 }} ellipsis>{acc.username}</Text>
+                          <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(acc.username!)} />
+                        </Space>
+                      )}
+                      {acc.email && (
+                        <Space size={4}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>邮箱:</Text>
+                          <Text style={{ maxWidth: 140 }} ellipsis>{acc.email}</Text>
+                          <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(acc.email!)} />
+                        </Space>
+                      )}
                     </Space>
-                  ) : <Text type="secondary">—</Text>,
-                },
-                {
-                  title: "邮箱", dataIndex: "email", key: "email", ellipsis: true,
-                  render: (v: string | null) => v ? (
-                    <Space size={4}>
-                      <Text style={{ maxWidth: 140 }} ellipsis>{v}</Text>
-                      <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(v)} />
-                    </Space>
-                  ) : <Text type="secondary">—</Text>,
-                },
-                {
-                  title: "密码", dataIndex: "password", key: "password",
-                  render: (v: string) => (
-                    <Space size={4}>
-                      <Text code style={{ maxWidth: 140 }} ellipsis>{v}</Text>
-                      <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(v)} />
-                    </Space>
-                  ),
-                },
-                {
-                  title: "备注", dataIndex: "notes", key: "notes", ellipsis: true,
-                  render: (v: string | null) => v ? <Text style={{ maxWidth: 120 }} ellipsis>{v}</Text> : <Text type="secondary">—</Text>,
-                },
-                {
-                  title: "操作", key: "action", width: 80, align: "center" as const,
-                  render: (_: any, acc: any) => (
                     <Space size={0}>
                       <Button size="small" type="text" icon={<EditOutlined />} onClick={() => handleEditAccount(acc)} title="编辑" />
                       <Popconfirm title="确定删除该账号？" onConfirm={() => handleRemoveAccount(acc._id)}>
                         <Button size="small" type="text" danger icon={<DeleteOutlined />} title="删除" />
                       </Popconfirm>
                     </Space>
-                  ),
-                },
-              ]}
-            />
+                  </div>
+                  <Space size={4}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>密码:</Text>
+                    <Text code style={{ maxWidth: 200 }} ellipsis>{acc.password}</Text>
+                    <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(acc.password)} />
+                  </Space>
+                  {acc.notes && (
+                    <div style={{ marginTop: 4 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>备注: </Text>
+                      <Text style={{ fontSize: 12 }}>{acc.notes}</Text>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
             {addAccountOpen ? (
               <div style={{ border: `1px dashed ${token.colorBorder}`, borderRadius: 6, padding: 12 }}>

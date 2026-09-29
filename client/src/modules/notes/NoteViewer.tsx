@@ -80,7 +80,9 @@ mdRenderer.image = ({ href, title, text }: Tokens.Image): string => {
 };
 
 // 标题渲染: 为每个标题生成唯一 ID (供大纲跳转)
-const headingIdCounts = new Map<string, number>();
+// headingIdCounts 在每次渲染前由 html useMemo 重置, 保证不跨渲染累积
+// 注意: 模块级可变状态, 仅因 marked.parse 同步调用而安全; 若改为异步解析需重构为参数传递
+let headingIdCounts = new Map<string, number>();
 mdRenderer.heading = ({ text, depth }: Tokens.Heading): string => {
   // 去除 HTML 标签后生成 slug
   const raw = text.replace(/<[^>]*>/g, "").trim();
@@ -100,7 +102,8 @@ interface OutlineItem {
 
 // 从 markdown 文本提取大纲 (与渲染器使用相同的 slug 生成逻辑)
 function extractOutline(markdown: string): OutlineItem[] {
-  headingIdCounts.clear();
+  // 复用渲染阶段的 headingIdCounts: 先重置, 提取完毕后由调用方再次重置
+  headingIdCounts = new Map<string, number>();
   const items: OutlineItem[] = [];
   const lines = markdown.split("\n");
   let inCodeBlock = false;
@@ -149,6 +152,8 @@ interface Props {
   attachments: Attachment[];
   onNoteChanged: () => void;
   onAttachmentsChanged: () => void;
+  /** 页面是否可见 (CachedPages 架构下用于释放 Milkdown 编辑器资源) */
+  isActive?: boolean;
 }
 
 const NoteViewer: React.FC<Props> = ({
@@ -156,6 +161,7 @@ const NoteViewer: React.FC<Props> = ({
   attachments,
   onNoteChanged,
   onAttachmentsChanged,
+  isActive = true,
 }) => {
   const { token } = theme.useToken();
   const [editing, setEditing] = useState(false);
@@ -165,6 +171,9 @@ const NoteViewer: React.FC<Props> = ({
   const textareaRef = useRef<any>(null);
   const mdRef = useRef<MilkdownEditorHandle>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const saveContentRef = useRef<(() => Promise<void>) | null>(null);
+  // 自动保存 timer: 编辑模式下停止输入 1.5 秒后自动保存
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 大纲侧边栏显示状态 (仅预览模式生效)
   const [outlineOpen, setOutlineOpen] = useState(
@@ -181,7 +190,8 @@ const NoteViewer: React.FC<Props> = ({
     () => (localStorage.getItem("ql-note-edit-mode") as EditMode) || "wysiwyg",
   );
   // 外部插入内容 (如附件链接) 时递增, 强制所见即所得编辑器重载以应用新 draft
-  const [wysiKey, setWysiKey] = useState(0);
+  // 注: 附件插入已改为直接调用 insertLink 命令, 不再需要递增 key 重建编辑器
+  const [wysiKey] = useState(0);
 
   // 笔记内搜索
   const [showSearch, setShowSearch] = useState(false);
@@ -194,6 +204,7 @@ const NoteViewer: React.FC<Props> = ({
   // 链接/图片插入弹窗 (两种编辑模式共用; 光标/选区在已有链接/图片上时为编辑回填)
   const [mediaModal, setMediaModal] = useState<{ kind: "link" | "image"; mode: EditMode } | null>(null);
   const [mediaForm] = Form.useForm();
+  const mediaModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openMediaModal = (kind: "link" | "image") => {
     const mode = editMode;
@@ -240,7 +251,7 @@ const NoteViewer: React.FC<Props> = ({
       }
     }
     // 延后打开: 避免与按钮点击引发的编辑器选区变更在同一渲染周期内 setState 报警
-    setTimeout(() => setMediaModal({ kind, mode }), 0);
+    mediaModalTimerRef.current = window.setTimeout(() => setMediaModal({ kind, mode }), 0);
   };
 
   const handleMediaOk = async () => {
@@ -292,8 +303,13 @@ const NoteViewer: React.FC<Props> = ({
   const getEl = (): HTMLTextAreaElement | null =>
     textareaRef.current?.resizableTextArea?.textArea || null;
 
-  // 切换笔记时重置状态
+  // 切换笔记时重置状态并清理自动保存 timer
   useEffect(() => {
+    // 清理旧的 autoSaveTimer, 避免切换笔记后触发对旧笔记的保存
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
     setEditing(false);
     setDraft(note.content || "");
     setTitle(note.title);
@@ -301,22 +317,43 @@ const NoteViewer: React.FC<Props> = ({
     setSearchQuery("");
   }, [note._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 页面变为不可见时, 若有未保存的编辑则自动保存
+  // 编辑器 (Milkdown) 保持挂载不卸载, 切回时可即时继续编辑, 无需等待重建
+  useEffect(() => {
+    if (!isActive && editing && dirty) {
+      saveContentRef.current?.();
+    }
+  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     setTitle(note.title);
     if (!editing) setDraft(note.content || "");
   }, [note.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const html = useMemo(() => {
-    headingIdCounts.clear();
-    const src = editing ? draft : note.content || "";
-    return marked.parse(src || "", { async: false, renderer: mdRenderer }) as string;
-  }, [editing, draft, note.content]);
+  // 用 ref 持有最新的 saveContent, 避免 Ctrl+S 的 useEffect 每次渲染重新注册监听器
 
-  // 大纲数据: 仅在非编辑模式下计算
+  // 预览防抖: 编辑模式下停止输入 200ms 后才重新解析 Markdown, 避免每次击键都触发 marked.parse
+  const [debouncedDraft, setDebouncedDraft] = useState(draft);
+  const [debouncedEditing, setDebouncedEditing] = useState(editing);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedDraft(draft);
+      setDebouncedEditing(editing);
+    }, 200);
+    return () => clearTimeout(t);
+  }, [draft, editing]);
+
+  const html = useMemo(() => {
+    headingIdCounts = new Map<string, number>();
+    const src = debouncedEditing ? debouncedDraft : note.content || "";
+    return marked.parse(src || "", { async: false, renderer: mdRenderer }) as string;
+  }, [debouncedEditing, debouncedDraft, note.content]);
+
+  // 大纲数据: 仅在非编辑模式且大纲侧边栏打开时计算
   const outline = useMemo(() => {
-    if (editing) return [];
+    if (editing || !outlineOpen) return [];
     return extractOutline(note.content || "");
-  }, [editing, note.content]);
+  }, [editing, note.content, outlineOpen]);
 
   // 点击大纲项: 滚动预览区到对应标题
   const scrollToHeading = useCallback((id: string) => {
@@ -329,6 +366,10 @@ const NoteViewer: React.FC<Props> = ({
   }, []);
 
   const dirty = editing && draft !== (note.content || "");
+
+  // 用 ref 持有 editing 状态, 避免 Ctrl+S 的 useEffect 随 editing 变化反复注册/注销监听器
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
 
   const saveContent = async (exitEdit = false) => {
     setSaving(true);
@@ -343,21 +384,21 @@ const NoteViewer: React.FC<Props> = ({
       setSaving(false);
     }
   };
+  saveContentRef.current = saveContent;
 
-  // Ctrl+S 保存
+  // Ctrl+S 保存 (使用 ref 持有 editing 状态, 避免随 editing 变化反复注册/注销全局监听器)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (editing && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if (editingRef.current && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        saveContent();
+        saveContentRef.current?.();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 自动保存: 编辑模式下停止输入 1.5 秒后自动保存
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -373,7 +414,7 @@ const NoteViewer: React.FC<Props> = ({
         autoSaveTimerRef.current = null;
       }
     };
-  }, [draft, editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft, editing, note.content]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTitle = async () => {
     const t = title.trim();
@@ -409,8 +450,10 @@ const NoteViewer: React.FC<Props> = ({
     const link = `[${a.originalName}](/api/notes/attachments/${a._id}/download)`;
     const next = draft ? `${draft}\n${link}\n` : `${link}\n`;
     setDraft(next);
-    // 所见即所得编辑器为一次性挂载, 需重载才能反映外部插入的内容
-    if (editMode === "wysiwyg") setWysiKey((k) => k + 1);
+    // 所见即所得编辑器: 直接通过编辑器命令插入, 避免递增 key 导致 Crepe 实例销毁/重建
+    if (editMode === "wysiwyg") {
+      mdRef.current?.insertLink(a.originalName, `/api/notes/attachments/${a._id}/download`);
+    }
   };
 
   // ---- Markdown 工具栏 ----
@@ -556,9 +599,12 @@ const NoteViewer: React.FC<Props> = ({
     return total;
   }, []);
 
+  // 用 ref 追踪搜索聚焦 timer, 组件卸载时清理
+  const searchFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openSearch = useCallback(() => {
     setShowSearch(true);
-    setTimeout(() => {
+    if (searchFocusTimerRef.current) clearTimeout(searchFocusTimerRef.current);
+    searchFocusTimerRef.current = setTimeout(() => {
       searchInputRef.current?.focus();
       if (editing) {
         const el = getEl();
@@ -641,22 +687,39 @@ const NoteViewer: React.FC<Props> = ({
     requestAnimationFrame(() => highlightSearch(searchQuery, currentSearchIdx));
   }, [editing, showSearch, searchQuery, currentSearchIdx, highlightSearch, clearHighlights]);
 
+  // 清理搜索聚焦 timer
+  useEffect(() => {
+    return () => {
+      if (searchFocusTimerRef.current) clearTimeout(searchFocusTimerRef.current);
+      if (mediaModalTimerRef.current) clearTimeout(mediaModalTimerRef.current);
+    };
+  }, []);
+
+  // 用 ref 持有 openSearch/closeSearch, 避免 Ctrl+F 的 useEffect 随 editing 变化反复注册/注销监听器
+  const openSearchRef = useRef(openSearch);
+  openSearchRef.current = openSearch;
+  const closeSearchRef = useRef(closeSearch);
+  closeSearchRef.current = closeSearch;
+  const showSearchRef = useRef(showSearch);
+  showSearchRef.current = showSearch;
+
   // Ctrl+F 打开搜索, Escape 关闭搜索
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (!isActive) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
-        if (!showSearch) {
+        if (!showSearchRef.current) {
           e.preventDefault();
-          openSearch();
+          openSearchRef.current();
         }
       }
-      if (e.key === "Escape" && showSearch) {
-        closeSearch();
+      if (e.key === "Escape" && showSearchRef.current) {
+        closeSearchRef.current();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [showSearch, openSearch, closeSearch]);
+  }, [isActive]); // 依赖 isActive: 页面不可见时不响应快捷键
 
   const mdToolbar: { tip: string; label: React.ReactNode; onClick?: () => void; kind?: "link" | "image" }[] = [
     { tip: "一级标题", label: "H1", onClick: () => prefixLines("# ") },
@@ -793,7 +856,8 @@ const NoteViewer: React.FC<Props> = ({
                 </div>
               }
             >
-              <MilkdownEditor ref={mdRef} key={`${note._id}-${wysiKey}`} defaultValue={draft} onChange={setDraft} />
+            {/* Milkdown 编辑器保持挂载, 切回笔记时即时可用, 无需等待重建 */}
+            <MilkdownEditor ref={mdRef} key={wysiKey} defaultValue={draft} onChange={setDraft} noteId={note._id} />
             </Suspense>
           </div>
         ) : (

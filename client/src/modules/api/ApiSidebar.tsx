@@ -154,45 +154,48 @@ const ApiSidebar: React.FC<Props> = ({
   }, [treeData, expandedKeys]);
 
   // 键盘上下左右: 选中移动 / 文件夹收起展开 / Enter 加载请求
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) return;
-      const el = document.activeElement as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
-      if (ctxMenu || renaming) return;
-      if (!flatList.length) return;
-      e.preventDefault();
-      const idx = flatList.findIndex(n => n._id === focusedId);
-      const cur = idx >= 0 ? flatList[idx] : null;
-      const moveTo = (n?: ApiCollectionItem) => {
-        if (!n) return;
-        setFocusedId(n._id);
-        treeRef.current?.scrollTo?.({ key: n._id });
-      };
-      if (e.key === "ArrowDown") return moveTo(idx >= 0 && idx < flatList.length - 1 ? flatList[idx + 1] : flatList[0]);
-      if (e.key === "ArrowUp") return moveTo(idx > 0 ? flatList[idx - 1] : flatList[flatList.length - 1]);
-      if (e.key === "Enter") {
-        if (cur?.type === "request") onSelectRequest(cur);
-        return;
-      }
-      if (!cur) return moveTo(flatList[0]);
-      if (e.key === "ArrowRight") {
-        if (cur.type !== "request" && !expandedKeys.includes(cur._id)) {
-          setExpandedKeys(prev => [...prev, cur._id]);
-        } else if (cur.type !== "request") {
-          moveTo(flatList[idx + 1]);
-        }
-      } else {
-        if (cur.type !== "request" && expandedKeys.includes(cur._id)) {
-          setExpandedKeys(prev => prev.filter(k => k !== cur._id));
-        } else if (cur.parentId) {
-          moveTo(flatList.find(n => n._id === cur.parentId));
-        }
-      }
+  // 用 ref 持有最新回调, 避免状态变化时反复注册/注销全局监听器
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  onKeyRef.current = (e: KeyboardEvent) => {
+    if (!(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"] as string[]).includes(e.key)) return;
+    const el = document.activeElement as HTMLElement | null;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+    if (ctxMenu || renaming) return;
+    if (!flatList.length) return;
+    e.preventDefault();
+    const idx = flatList.findIndex(n => n._id === focusedId);
+    const cur = idx >= 0 ? flatList[idx] : null;
+    const moveTo = (n?: ApiCollectionItem) => {
+      if (!n) return;
+      setFocusedId(n._id);
+      treeRef.current?.scrollTo?.({ key: n._id });
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [flatList, focusedId, expandedKeys, ctxMenu, renaming, onSelectRequest]);
+    if (e.key === "ArrowDown") return moveTo(idx >= 0 && idx < flatList.length - 1 ? flatList[idx + 1] : flatList[0]);
+    if (e.key === "ArrowUp") return moveTo(idx > 0 ? flatList[idx - 1] : flatList[flatList.length - 1]);
+    if (e.key === "Enter") {
+      if (cur?.type === "request") onSelectRequest(cur);
+      return;
+    }
+    if (!cur) return moveTo(flatList[0]);
+    if (e.key === "ArrowRight") {
+      if (cur.type !== "request" && !expandedKeys.includes(cur._id)) {
+        setExpandedKeys(prev => [...prev, cur._id]);
+      } else if (cur.type !== "request") {
+        moveTo(flatList[idx + 1]);
+      }
+    } else {
+      if (cur.type !== "request" && expandedKeys.includes(cur._id)) {
+        setExpandedKeys(prev => prev.filter(k => k !== cur._id));
+      } else if (cur.parentId) {
+        moveTo(flatList.find(n => n._id === cur.parentId));
+      }
+    }
+  };
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => onKeyRef.current(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // 点击其他位置关闭右键菜单 (用 mousedown 而非 contextmenu, 避免与 onRightClick 时序冲突)
   useEffect(() => {

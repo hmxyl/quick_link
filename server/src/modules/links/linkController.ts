@@ -154,7 +154,13 @@ export async function list(req: AuthRequest, res: Response): Promise<void> {
 
     const filter: any = { userId: req.userId };
     if (query.favorite === "true") filter.isFavorite = true;
-    if (query.tag) filter.tags = query.tag;
+    if (query.tag) {
+      // 兼容新旧字段: tag 或 tags 数组中包含该标签名
+      filter.$or = [
+        { tag: query.tag },
+        { tags: query.tag },
+      ];
+    }
     if (query.search) {
       filter.$or = [
         { title: { $regex: new RegExp(query.search, "i") } },
@@ -188,7 +194,7 @@ export async function list(req: AuthRequest, res: Response): Promise<void> {
       title: doc.title,
       description: doc.description,
       icon: doc.icon,
-      tags: doc.tags,
+      tag: doc.tag || (doc.tags && doc.tags.length > 0 ? doc.tags[0] : "其他"),
       isFavorite: doc.isFavorite,
       isArchived: doc.isArchived,
       clickCount: doc.clickCount,
@@ -206,6 +212,75 @@ export async function list(req: AuthRequest, res: Response): Promise<void> {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+// 获取所有链接 (无分页), 按标签分组, 兼容旧 tags[] 字段
+export async function listAll(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const [docs, tags] = await Promise.all([
+      new Promise<Link[]>((resolve, reject) => {
+        db.links.find({ userId: req.userId }).sort({ createdAt: -1 }).exec((err, docs) => {
+          if (err) reject(err);
+          else resolve(docs as Link[]);
+        });
+      }),
+      new Promise<any[]>((resolve, reject) => {
+        db.tags.find({ userId: req.userId }).sort({ name: 1 }).exec((err, docs) => {
+          if (err) reject(err);
+          else resolve(docs as any[]);
+        });
+      }),
+    ]);
+
+    // 构建标签名 -> 列数映射
+    const tagColumnsMap = new Map<string, number>();
+    for (const t of tags) {
+      tagColumnsMap.set(t.name, t.columns ?? 3);
+    }
+
+    // 解析每个链接的标签: 优先 tag 字段, 其次 tags[0], 默认 "其他"
+    const resolveTag = (link: Link): string => {
+      if (link.tag) return link.tag;
+      if (link.tags && link.tags.length > 0) return link.tags[0];
+      return "其他";
+    };
+
+    // 按标签分组
+    const grouped: Record<string, any[]> = {};
+    for (const doc of docs) {
+      const tagName = resolveTag(doc);
+      if (!grouped[tagName]) grouped[tagName] = [];
+      grouped[tagName].push({
+        _id: doc._id,
+        url: doc.url,
+        title: doc.title,
+        description: doc.description,
+        icon: doc.icon,
+        tag: tagName,
+        isFavorite: doc.isFavorite,
+        isArchived: doc.isArchived,
+        clickCount: doc.clickCount,
+        hasAccount: doc.hasAccount || false,
+        accountCount: doc.accounts?.length || 0,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      });
+    }
+
+    // 确保 "其他" 标签存在
+    if (!tagColumnsMap.has("其他")) {
+      tagColumnsMap.set("其他", 3);
+    }
+
+    res.json({
+      success: true,
+      data: grouped,
+      tags: tags.map((t: any) => ({ name: t.name, color: t.color, columns: t.columns ?? 3 })),
+      tagColumns: Object.fromEntries(tagColumnsMap),
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -234,7 +309,7 @@ export async function getById(req: AuthRequest, res: Response): Promise<void> {
 
 export async function create(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { url, title, description, icon, tags, accounts } = req.body;
+    const { url, title, description, icon, tag, tags, accounts } = req.body;
 
     // URL 可为空: 空 URL 时跳过归一化与元数据抓取
     const hasUrl = !!url && String(url).trim();
@@ -242,6 +317,8 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
     let effectiveTitle = title?.trim() || (hasUrl ? titleFromUrl(normalizedUrl) : "");
     let effectiveDescription = description?.trim() || undefined;
     let effectiveIcon = icon as string | undefined;
+    // 单个标签: 优先 tag 字段, 其次 tags[0], 默认 "其他"
+    const effectiveTag: string = tag || (Array.isArray(tags) && tags.length > 0 ? tags[0] : "其他");
     const now = new Date().toISOString();
 
     // Auto icon / metadata assignment (仅有 URL 时执行)
@@ -273,7 +350,7 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
       title: effectiveTitle,
       description: effectiveDescription,
       icon: effectiveIcon,
-      tags: tags || [],
+      tag: effectiveTag,
       isFavorite: false,
       isArchived: false,
       clickCount: 0,
@@ -329,7 +406,7 @@ export async function searchByUrl(req: AuthRequest, res: Response): Promise<void
       title: doc.title,
       description: doc.description,
       icon: doc.icon,
-      tags: doc.tags,
+      tag: doc.tag || (doc.tags && doc.tags.length > 0 ? doc.tags[0] : "其他"),
       hasAccount: doc.hasAccount || false,
       accountCount: doc.accounts?.length || 0,
       createdAt: doc.createdAt,
@@ -341,43 +418,22 @@ export async function searchByUrl(req: AuthRequest, res: Response): Promise<void
   }
 }
 
-// 批量设置标签 (覆盖选中链接的标签)
+// 批量设置标签 (每个链接设置单个标签)
 export async function batchUpdateTags(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { ids, tags, mode } = req.body;
+    const { ids, tag, tags, mode } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
       res.status(400).json({ success: false, error: "请选择至少一个链接" });
       return;
     }
-    if (!Array.isArray(tags)) {
-      res.status(400).json({ success: false, error: "标签参数无效" });
-      return;
-    }
-    // mode: "set"=覆盖 / "add"=追加 / "remove"=移除, 默认 set
-    const op = mode === "add" || mode === "remove" ? mode : "set";
+    // 单个标签: 优先 tag 字段, 其次 tags[0]
+    const newTag: string = tag || (Array.isArray(tags) && tags.length > 0 ? tags[0] : "其他");
     let count = 0;
     for (const id of ids) {
-      const link: Link | null = await new Promise((resolve, reject) => {
-        db.links.findOne({ _id: id, userId: req.userId }, (err, doc) => {
-          if (err) reject(err);
-          else resolve(doc as Link | null);
-        });
-      });
-      if (!link) continue;
-      let newTags: string[];
-      if (op === "add") {
-        const merged = new Set([...(link.tags || []), ...tags]);
-        newTags = [...merged];
-      } else if (op === "remove") {
-        const removeSet = new Set(tags);
-        newTags = (link.tags || []).filter((t) => !removeSet.has(t));
-      } else {
-        newTags = [...tags];
-      }
       await new Promise<void>((resolve, reject) => {
         db.links.update(
           { _id: id, userId: req.userId },
-          { $set: { tags: newTags, updatedAt: new Date().toISOString() } },
+          { $set: { tag: newTag, updatedAt: new Date().toISOString() } },
           {},
           (err) => (err ? reject(err) : resolve())
         );
@@ -564,7 +620,7 @@ export async function batchImport(req: AuthRequest, res: Response): Promise<void
       title: item.title || item.url || "",
       description: item.description,
       icon: item.icon || undefined,
-      tags: item.tags || [],
+      tag: item.tag || (Array.isArray(item.tags) && item.tags.length > 0 ? item.tags[0] : "其他"),
       isFavorite: item.isFavorite || false,
       isArchived: item.isArchived || false,
       clickCount: item.clickCount || 0,
@@ -601,9 +657,9 @@ export async function exportLinks(req: AuthRequest, res: Response): Promise<void
     });
 
     if (format === "csv") {
-      const header = "URL,Title,Description,Tags,Icon\n";
+      const header = "URL,Title,Description,Tag,Icon\n";
       const rows = links
-        .map((l) => `"${l.url}","${l.title}","${l.description || ""}","${(l.tags || []).join(";")}","${l.icon || ""}"`)
+        .map((l) => `"${l.url}","${l.title}","${l.description || ""}","${l.tag || (l.tags && l.tags.length > 0 ? l.tags[0] : "其他")}","${l.icon || ""}"`)
         .join("\n");
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=links.csv");
@@ -630,7 +686,7 @@ export async function exportLinks(req: AuthRequest, res: Response): Promise<void
         title: l.title,
         description: l.description,
         icon: l.icon,
-        tags: l.tags || [],
+        tag: l.tag || (l.tags && l.tags.length > 0 ? l.tags[0] : "其他"),
         isFavorite: l.isFavorite,
         isArchived: l.isArchived,
         clickCount: l.clickCount,

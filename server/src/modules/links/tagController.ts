@@ -21,7 +21,7 @@ export async function list(req: AuthRequest, res: Response): Promise<void> {
 
 export async function create(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { name, color } = req.body;
+    const { name, color, columns } = req.body;
 
     if (!name) {
       res.status(400).json({ success: false, error: "Tag name is required" });
@@ -46,6 +46,7 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
       userId: req.userId!,
       name,
       color,
+      columns: columns !== undefined ? Number(columns) : 3,
       createdAt: new Date().toISOString(),
     };
 
@@ -64,10 +65,11 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
 
 export async function update(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { name, color } = req.body;
+    const { name, color, columns } = req.body;
     const updates: any = {};
     if (name !== undefined) updates.name = name;
     if (color !== undefined) updates.color = color;
+    if (columns !== undefined) updates.columns = Number(columns);
 
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ success: false, error: "No fields to update" });

@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { commandsCtx, editorViewCtx, prosePluginsCtx, remarkPluginsCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx, parserCtx, prosePluginsCtx, remarkPluginsCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import {
   createCodeBlockCommand,
   insertHrCommand,
@@ -200,16 +200,20 @@ const qlTableBreakPlugin = new Plugin({
 interface Props {
   defaultValue: string;
   onChange: (markdown: string) => void;
+  /** 笔记 id, 仅在切换笔记时触发全量替换; 编辑输入引起的变化由 listener 自然回传 */
+  noteId?: string;
 }
 
 // 类 Typora 的所见即所得 Markdown 编辑器 (基于 Milkdown Crepe)
 // 负责挂载/卸载实例; 内容变化通过 listener 回传 markdown;
 // 通过 ref.run(cmd) 响应外部工具栏的格式命令
-const MilkdownEditor = forwardRef<MilkdownEditorHandle, Props>(({ defaultValue, onChange }, ref) => {
+const MilkdownEditor = forwardRef<MilkdownEditorHandle, Props>(({ defaultValue, onChange, noteId }, ref) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<Crepe | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  // 追踪 create/destroy 的 Promise 链, 确保 destroy 完成后再 create, 避免竞态
+  const lifecycleRef = useRef<Promise<unknown>>(Promise.resolve());
 
   useImperativeHandle(ref, () => ({
     run: (cmd) => {
@@ -473,14 +477,49 @@ const MilkdownEditor = forwardRef<MilkdownEditorHandle, Props>(({ defaultValue, 
     });
 
     crepeRef.current = crepe;
-    crepe.create().catch((err) => console.error("[milkdown] create failed", err));
+    // 链式执行: 等待上一次 destroy 完成后再 create, 避免竞态
+    lifecycleRef.current = lifecycleRef.current.finally(() =>
+      crepe.create().catch((err) => { console.error("[milkdown] create failed", err); })
+    );
 
     return () => {
+      const c = crepeRef.current;
       crepeRef.current = null;
-      crepe.destroy().catch(() => {});
+      if (c) {
+        // 链式执行: 等待 create 完成后再 destroy, 确保不与新 create 并发
+        lifecycleRef.current = lifecycleRef.current.finally(() =>
+          c.destroy().catch(() => {})
+        );
+      }
     };
-    // 仅挂载一次: 切换笔记/模式时由父组件通过 key 重新挂载
+    // 仅挂载一次: 切换笔记时通过下方 defaultValue effect 更新内容
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 外部 defaultValue 变化时, 通过 parser 更新编辑器文档
+  // 优化: 仅在切换笔记 (noteId 变化) 时做全量替换;
+  // 编辑输入引起的 defaultValue 变化由 listener 自然回传, 无需重解析整个文档
+  const lastNoteIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const crepe = crepeRef.current;
+    if (!crepe) return;
+    // noteId 未变化 → typing 引起的回传, 跳过全量替换
+    if (noteId && noteId === lastNoteIdRef.current) return;
+    lastNoteIdRef.current = noteId || null;
+    lifecycleRef.current.then(() => {
+      if (!crepeRef.current) return; // 已卸载
+      try {
+        crepe.editor.action((ctx) => {
+          const parser = ctx.get(parserCtx);
+          const view = ctx.get(editorViewCtx);
+          const doc = parser(defaultValue);
+          const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content);
+          view.dispatch(tr);
+        });
+      } catch (err) {
+        console.error("[milkdown] update content failed:", err);
+      }
+    });
+  }, [defaultValue, noteId]);
 
   return <div ref={rootRef} className="ql-milkdown-root" onClick={(e) => {
     const target = (e.target as HTMLElement).closest?.("a");

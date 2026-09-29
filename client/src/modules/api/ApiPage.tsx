@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Button, Dropdown, Modal, Space, message, Typography, Tree } from "antd";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Dropdown, Input, Modal, Space, message, Typography, Tree } from "antd";
 import {
   SendOutlined,
   SaveOutlined,
@@ -7,6 +7,8 @@ import {
   FolderOutlined,
 } from "@ant-design/icons";
 import { apiManagerApi } from "../../services/api";
+import { usePageVisibility } from "../../hooks/usePageVisibility";
+import { parseCurlCommand } from "./curlParser";
 import type {
   ApiEnvironment,
   ApiCollectionItem,
@@ -27,6 +29,9 @@ function replaceEnvVars(str: string, vars: Record<string, string>): string {
 }
 
 const ApiPage: React.FC = () => {
+  // 页面可见性: 不活跃时不响应全局快捷键
+  const isActive = usePageVisibility("/api");
+
   // 环境
   const [environments, setEnvironments] = useState<ApiEnvironment[]>([]);
   const [activeEnv, setActiveEnv] = useState<ApiEnvironment | null>(null);
@@ -43,7 +48,7 @@ const ApiPage: React.FC = () => {
   const [headers, setHeaders] = useState<KeyValueEntry[]>([]);
   const [queryParams, setQueryParams] = useState<KeyValueEntry[]>([]);
   const [cookies, setCookies] = useState<KeyValueEntry[]>([]);
-  const [bodyType, setBodyType] = useState<string>("none");
+  const [bodyType, setBodyType] = useState<string>("json");
   const [body, setBody] = useState("");
   const [authType, setAuthType] = useState<string>("none");
   const [authConfig, setAuthConfig] = useState<Record<string, string>>({});
@@ -58,6 +63,10 @@ const ApiPage: React.FC = () => {
 
   // 历史
   const [history, setHistory] = useState<ApiHistory[]>([]);
+
+  // cURL 导入弹窗
+  const [curlModalOpen, setCurlModalOpen] = useState(false);
+  const [curlInput, setCurlInput] = useState("");
 
   // 加载环境和集合
   const loadEnvironments = useCallback(async () => {
@@ -130,17 +139,20 @@ const ApiPage: React.FC = () => {
     }
   }, [currentRequest, requestName, method, url, headers, queryParams, cookies, bodyType, body, authType, authConfig, loadCollections]);
 
-  // 全局 Ctrl+S 保存
+  // 全局 Ctrl+S 保存 (使用 ref 持有最新 handleSave, 避免每次输入都重新注册监听器)
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (!isActive) return;
       if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        handleSave();
+        handleSaveRef.current();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [handleSave]);
+  }, [isActive]); // 依赖 isActive: 页面不可见时不响应快捷键
 
   // 确认保存新请求到指定文件夹
   const handleConfirmSaveNew = useCallback(async () => {
@@ -180,7 +192,7 @@ const ApiPage: React.FC = () => {
     setHeaders([]);
     setQueryParams([]);
     setCookies([]);
-    setBodyType("none");
+    setBodyType("json");
     setBody("");
     setAuthType("none");
     setAuthConfig({});
@@ -432,6 +444,27 @@ const ApiPage: React.FC = () => {
     });
   }, [url, method, headers, cookies, body, bodyType, authType, authConfig, getEnvVars]);
 
+  // 导入 cURL
+  const handleImportCurl = useCallback(() => {
+    try {
+      const parsed = parseCurlCommand(curlInput);
+      setMethod(parsed.method);
+      setUrl(parsed.url);
+      setHeaders(parsed.headers);
+      setQueryParams(parsed.queryParams);
+      setCookies(parsed.cookies);
+      setBodyType(parsed.bodyType);
+      setBody(parsed.body);
+      setAuthType(parsed.authType);
+      setAuthConfig(parsed.authConfig);
+      setCurlModalOpen(false);
+      setCurlInput("");
+      message.success("导入成功");
+    } catch (err: any) {
+      message.error(err.message || "cURL 格式错误，请检查后重试");
+    }
+  }, [curlInput]);
+
   // 环境选择下拉
   const envMenuItems = [
     { key: "none", label: "无环境" },
@@ -531,6 +564,7 @@ const ApiPage: React.FC = () => {
             onAuthConfigChange={setAuthConfig}
             onSend={handleSend}
             onCopyCurl={handleCopyCurl}
+            onImportCurl={() => setCurlModalOpen(true)}
           />
 
           {/* 响应查看器 */}
@@ -584,6 +618,28 @@ const ApiPage: React.FC = () => {
         onSaved={loadEnvironments}
         onActivate={handleActivateEnv}
       />
+
+      {/* cURL 导入弹窗 */}
+      <Modal
+        title="导入 cURL"
+        open={curlModalOpen}
+        onOk={handleImportCurl}
+        onCancel={() => { setCurlModalOpen(false); setCurlInput(""); }}
+        okText="解析并导入"
+        cancelText="取消"
+        width={600}
+      >
+        <div style={{ marginBottom: 8, color: "#888", fontSize: 12 }}>
+          粘贴完整的 curl 命令，支持 -X、-H、-d、-u、-b 等常用参数
+        </div>
+        <Input.TextArea
+          value={curlInput}
+          onChange={e => setCurlInput(e.target.value)}
+          placeholder={"curl -X POST 'https://api.example.com/users' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"name\": \"test\"}'"}
+          rows={10}
+          style={{ fontFamily: "var(--ql-font-family, monospace)" }}
+        />
+      </Modal>
     </div>
   );
 };

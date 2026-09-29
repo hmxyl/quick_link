@@ -16,10 +16,10 @@
 
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
-| 链接管理 | 快速导入（粘贴 URL 自动抓取标题/描述/图标，URL 可为空）、搜索、标签筛选、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、批量设标签、批量删除、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗、复制并用系统浏览器打开 | [LINKS.md](./LINKS.md) |
-| 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键打开于 Typora（支持自定义安装路径）、复制文件路径/打开于资源管理器、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
+| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗（含每行链接数配置）、复制并用系统浏览器打开 | [LINKS.md](./LINKS.md) |
+| 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键打开于 Typora（支持自定义安装路径）、复制文件路径/打开于资源管理器、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
-| 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理（键盘方向键导航）、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth，JSON 一键格式化，可编辑接口名称）、响应查看（状态码/耗时/Body/Headers）、请求历史记录（点击恢复含响应结果）、集合导出/导入（原生格式 + Postman Collection v2.1 双向兼容）、拷贝为 cURL | [API.md](./API.md) |
+| 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理（键盘方向键导航）、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth，JSON 一键格式化，可编辑接口名称）、响应查看（状态码/耗时/Body/Headers，JSON 格式化/原始切换）、请求历史记录（点击恢复含响应结果）、集合导出/导入（原生格式 + Postman Collection v2.1 双向兼容）、环境 Postman 格式导入/导出、拷贝为 cURL、导入 cURL | [API.md](./API.md) |
 | 桌面版 | Electron 桌面版（NSIS 安装包 / Portable 单文件 / ZIP 免安装三种格式），内嵌后端，双击即用；最小化/关闭隐藏到系统托盘后台运行；太阳图标统一 | 本文 §9 |
 | 数据存储 | 零外部依赖：NeDB 嵌入式 .db 文件 + 笔记文件树，全部统一存于 `user_data/` 目录（桌面版安装时可指定位置，默认用户目录下的 `.quick_link`），便于整体备份/迁移 | 本文 §4 |
 | 通用体验 | 全中文界面（Ant Design zhCN）、外观主题（跟随系统/浅色/深色）、全局字体选择、侧栏收起记忆、记住密码/自动登录、开机自启（桌面版） | 本文 §8/§9 |
@@ -57,13 +57,14 @@ quick_link/
 │   │   │   ├── links/          # 链接管理: LinksPage / LinkIcon / TagManager
 │   │   │   ├── notes/          # 笔记管理: NotesPage / NoteViewer / MilkdownEditor / AttachmentManager / imageSize
 │   │   │   ├── user/           # 用户信息管理: LoginPage / RegisterPage / SettingsModal
-│   │   │   └── api/            # 接口管理: ApiPage / ApiSidebar / RequestBuilder / ResponseViewer / EnvironmentModal
+│   │   │   └── api/            # 接口管理: ApiPage / ApiSidebar / RequestBuilder / ResponseViewer / EnvironmentModal / curlParser
 │   │   ├── layout/             # AppLayout 侧栏+顶栏 (收起记忆, 用户下拉仅退出登录)
 │   │   ├── services/           # api.ts (axios 封装) / settings.ts (本地设置与凭据记忆)
+│   │   ├── hooks/              # usePageVisibility (CachedPages 页面可见性 Context + hook)
 │   │   ├── stores/authStore.ts # Zustand 认证态; themeStore.ts # 外观主题 (跟随系统/浅/深)
 │   │   ├── styles/markdown.css # Markdown 预览样式 + 深色模式覆盖
 │   │   ├── types/              # 共享类型定义
-│   │   ├── App.tsx             # 路由 (BrowserRouter, zhCN)
+│   │   ├── App.tsx             # 路由 (BrowserRouter, zhCN) + CachedPages 页面缓存
 │   │   └── main.tsx
 │   ├── public/icon.svg         # 太阳图标 (favicon 矢量源)
 │   └── vite.config.ts          # 开发代理 /api → :3000
@@ -230,6 +231,17 @@ npm run migrate:status    # 查看状态
 Zustand `authStore`：`user / token / isAuthenticated / login / register / logout / autoLogin`。
 
 Zustand `themeStore`：`mode (system|light|dark) / isDark / setMode`；持久化于 `AppSettings.themeMode`（`localStorage quicklink:settings`）。
+
+### 8.4 页面缓存（CachedPages）
+
+模块页面（链接/笔记/接口）首次访问后通过 CSS `display` 缓存，避免反复卸载/重建：
+
+- `App.tsx` 的 `CachedPages` 组件以 `display: block/none` 切换已访问页面，未访问的页面延迟挂载（`React.lazy` 按需下载）；
+- 笔记管理：Milkdown/ProseMirror 重型编辑器保持挂载，切换模块时无需重建（避免卡顿与崩溃）；
+- 链接/接口管理：首次挂载后缓存 DOM 与数据，切换模块零延迟；
+- `PageVisibilityContext`（`hooks/usePageVisibility.ts`）提供当前路由路径，子组件通过 `usePageVisibility(routePath)` 判断自身是否可见；
+- 全局快捷键（↑↓←→ 导航、Ctrl+F 搜索、Ctrl+S 保存等）仅在对应页面可见时生效，隐藏页面的键盘监听器自动跳过；
+- 页面从可见变为不可见时，若有未保存的编辑内容则自动触发保存（笔记模块）。
 
 ---
 

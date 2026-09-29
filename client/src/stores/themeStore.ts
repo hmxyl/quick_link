@@ -5,6 +5,9 @@ import { getSettings, saveSettings, type ThemeMode } from "../services/settings"
 // 持久化于 localStorage (AppSettings.themeMode); system 模式下监听系统外观变化实时切换
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
+const mql = window.matchMedia(DARK_QUERY);
+// 模块级监听器, 仅附加一次, 避免 HMR 重复附加
+let systemListenerAttached = false;
 
 export function systemPrefersDark(): boolean {
   return typeof window !== "undefined" && window.matchMedia(DARK_QUERY).matches;
@@ -20,11 +23,16 @@ interface ThemeState {
   setMode: (mode: ThemeMode) => void;
 }
 
-export const useThemeStore = create<ThemeState>((set, get) => {
+export const useThemeStore = create<ThemeState>((set, _get) => {
   // 系统外观变化时, 若当前为跟随系统模式则同步刷新
-  window.matchMedia(DARK_QUERY).addEventListener("change", () => {
-    if (get().mode === "system") set({ isDark: systemPrefersDark() });
-  });
+  // 使用模块级标志确保监听器仅附加一次, 避免 HMR 重复附加导致多次回调
+  if (!systemListenerAttached) {
+    const onSystemThemeChange = () => {
+      if (useThemeStore.getState().mode === "system") useThemeStore.setState({ isDark: systemPrefersDark() });
+    };
+    mql.addEventListener("change", onSystemThemeChange);
+    systemListenerAttached = true;
+  }
 
   const mode = getSettings().themeMode;
   return {

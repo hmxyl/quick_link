@@ -7,6 +7,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get("/", linkController.list);
+router.get("/all", linkController.listAll);
 router.get("/export", linkController.exportLinks);
 router.get("/account-count", linkController.countWithAccount);
 router.get("/search-by-url", linkController.searchByUrl);

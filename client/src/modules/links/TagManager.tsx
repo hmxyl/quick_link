@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { List, Button, Modal, Form, Input, ColorPicker, message, Popconfirm, Tag as AntTag } from "antd";
+import { List, Button, Modal, Form, Input, InputNumber, ColorPicker, message, Popconfirm, Tag as AntTag } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { tagApi } from "../../services/api";
 import type { Tag } from "../../types";
@@ -40,7 +40,7 @@ const TagManager: React.FC<{
 
   const handleEdit = (tag: Tag) => {
     setEditingTag(tag);
-    form.setFieldsValue({ name: tag.name, color: tag.color });
+    form.setFieldsValue({ name: tag.name, color: tag.color, columns: tag.columns ?? 3 });
     setEditModalOpen(true);
   };
 
@@ -59,11 +59,12 @@ const TagManager: React.FC<{
     try {
       const values = await form.validateFields();
       const color = typeof values.color === "string" ? values.color : values.color?.toHexString?.() || "#1677ff";
+      const payload: any = { name: values.name, color, columns: values.columns ?? 3 };
       if (editingTag) {
-        await tagApi.update(editingTag._id, { name: values.name, color });
+        await tagApi.update(editingTag._id, payload);
         message.success("标签已更新");
       } else {
-        await tagApi.create({ name: values.name, color });
+        await tagApi.create(payload);
         message.success("标签已创建");
       }
       setEditModalOpen(false);
@@ -103,18 +104,22 @@ const TagManager: React.FC<{
             ]}
           >
             <AntTag color={tag.color || "default"}>{tag.name}</AntTag>
+            <span style={{ marginLeft: 8, fontSize: 12, color: "#999" }}>每行 {tag.columns ?? 3} 个</span>
           </List.Item>
         )}
       />
 
       {/* Add/Edit Tag Modal (nested) */}
       <Modal title={editingTag ? "编辑标签" : "添加标签"} open={editModalOpen} onOk={handleSubmit} onCancel={() => setEditModalOpen(false)}>
-        <Form form={form} layout="vertical" initialValues={{ color: "#1677ff" }}>
+        <Form form={form} layout="vertical" initialValues={{ color: "#1677ff", columns: 3 }}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入标签名称" }]}>
             <Input />
           </Form.Item>
           <Form.Item name="color" label="颜色">
             <ColorPicker />
+          </Form.Item>
+          <Form.Item name="columns" label="每行链接数" tooltip="链接卡片网格每行展示的数量">
+            <InputNumber min={1} max={8} style={{ width: "100%" }} />
           </Form.Item>
         </Form>
       </Modal>

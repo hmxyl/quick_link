@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Empty, Spin, Tabs, Tag, theme, Typography } from "antd";
+import { Button, Spin, Tabs, Tag, theme, Typography } from "antd";
 import { ClockCircleOutlined, DatabaseOutlined, FormatPainterOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
@@ -45,18 +45,12 @@ const ResponseViewer: React.FC<Props> = ({ response, loading }) => {
   const [formatted, setFormatted] = useState(true);
   const { token } = theme.useToken();
 
-  if (loading) {
+  if (!response) {
+    // 无响应且非请求中: 不占位, 请求编辑区占满剩余高度, 滚动条贯穿整个参数区域
+    if (!loading) return null;
     return (
       <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 200 }}>
         <Spin tip="请求中..." />
-      </div>
-    );
-  }
-
-  if (!response) {
-    return (
-      <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 200 }}>
-        <Empty description="发送请求以查看响应" />
       </div>
     );
   }

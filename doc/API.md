@@ -4,7 +4,7 @@
 
 ## 1. 功能概览
 
-模仿 Postman 的本地接口管理工具，支持环境配置与切换、集合/文件夹/请求三级树形管理、HTTP 请求发送与响应查看（含 Cookies 编辑）、请求历史记录、集合导出/导入（原生格式与 Postman Collection 双向兼容）、拷贝为 cURL。
+模仿 Postman 的本地接口管理工具，支持环境配置与切换、集合/文件夹/请求三级树形管理、HTTP 请求发送与响应查看（含 Cookies 编辑）、请求历史记录、集合导出/导入（原生格式与 Postman Collection 双向兼容）、拷贝为 cURL、导入 cURL。
 
 **核心能力**：
 
@@ -13,14 +13,14 @@
 - **请求构建**：可编辑接口名称栏、7 种 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS）、Query Params / Headers / Cookies 键值对编辑（支持启用/禁用）、4 种 Body 类型（none/json/form-urlenc/raw，JSON 模式含一键格式化）、Bearer Token 与 Basic Auth 认证、拷贝为 cURL
 - **响应查看**：状态码（颜色标识）、耗时（ms）、响应大小、Body（JSON 自动格式化）、响应 Headers 表格
 - **历史记录**：每次发送请求自动保存快照（请求参数 + 响应摘要），支持分页加载、点击恢复（含响应结果）、清空全部
-- **导出/导入**：右键导出集合为 JSON 文件（含完整树形结构与所有请求配置），支持导入还原；支持 Postman Collection v2.1 格式双向导入/导出（导入自动解析文件夹/请求/Headers/Query/Body/Auth，导出生成标准 `.postman_collection.json`）
+- **导出/导入**：右键导出集合为 JSON 文件（含完整树形结构与所有请求配置），支持导入还原；支持 Postman Collection v2.1 格式双向导入/导出（导入自动解析文件夹/请求/Headers/Query/Body/Auth，导出生成标准 `.postman_collection.json`）；环境管理弹窗支持 Postman 环境文件（`.postman_environment.json`）双向导入/导出
 
 **代码位置**：
 
 | 端 | 目录 | 文件 |
 | -- | ---- | ---- |
 | 服务端 | `server/src/modules/api/` | `environmentController.ts` / `collectionController.ts` / `historyController.ts` / `proxyController.ts` + `routes.ts` |
-| 前端 | `client/src/modules/api/` | `ApiPage.tsx`（主页面）、`ApiSidebar.tsx`（集合树+历史面板）、`RequestBuilder.tsx`（请求构建器）、`ResponseViewer.tsx`（响应查看器）、`EnvironmentModal.tsx`（环境管理弹窗） |
+| 前端 | `client/src/modules/api/` | `ApiPage.tsx`（主页面）、`ApiSidebar.tsx`（集合树+历史面板）、`RequestBuilder.tsx`（请求构建器）、`ResponseViewer.tsx`（响应查看器）、`EnvironmentModal.tsx`（环境管理弹窗）、`curlParser.ts`（cURL 命令解析器） |
 
 ## 2. 数据模型
 
@@ -106,7 +106,7 @@
 
 | Method | Path | 描述 | 认证 |
 | ------ | ---- | ---- | ---- |
-| GET | /api/api-manager/history | 列表（分页，`?page=1&limit=50`，按时间倒序） | Yes |
+| GET | /api/api-manager/history | 列表（分页，`?page=1&limit=50`，按时间倒序；前端默认请求 `limit=100`） | Yes |
 | POST | /api/api-manager/history | 记录一条历史 `{method, url, statusCode, duration, requestSnapshot, responseSnapshot}` | Yes |
 | DELETE | /api/api-manager/history/:id | 删除单条 | Yes |
 | DELETE | /api/api-manager/history | 清空当前用户全部历史 | Yes |
@@ -203,7 +203,7 @@
 | [环境: 开发环境 v]                          [发送] [保存]  |
 +-------------------+--------------------------------------+
 | [集合] [历史]      | 请求构建器                            |
-|                   | [方法 GET v] [URL_______________] [Send] [cURL]
+|                   | [方法 GET v] [URL_______________] [cURL] [导入 cURL]
 | > 用户接口         | [Params][Headers][Cookies][Body][Auth]  |
 |   > 获取用户列表   | +------------------------------------+
 |   > 创建用户       | |  响应结果                          |
@@ -214,7 +214,7 @@
 +-------------------+--------------------------------------+
 ```
 
-- **顶部工具栏**：环境下拉选择器（含"无环境"和"管理环境..."选项）、发送按钮、保存按钮（Ctrl+S 全局快捷键）；URL 栏右侧 cURL 按钮将当前请求（含环境变量替换后的值、Headers、Cookies、Auth、Body）拷贝为 cURL 命令到剪贴板
+- **顶部工具栏**：环境下拉选择器（含“无环境”和“管理环境...”选项）、发送按钮、保存按钮（Ctrl+S 全局快捷键）；URL 栏右侧 cURL 按钮将当前请求（含环境变量替换后的值、Headers、Cookies、Auth、Body）拷贝为 cURL 命令到剪贴板；「导入 cURL」按钮打开 cURL 导入弹窗
 - **左侧面板**（280px 固定宽度）：集合/历史两个 Tab 页切换
   - **集合 Tab**：顶部三个快捷按钮——「新建集合」「导入 Postman」（选择 `.json` 文件）「新建请求」（空白请求，保存时弹窗选择文件夹）；其下为树形结构
   - **历史 Tab**：刷新 + 清空按钮；列表每行显示方法标签 + 状态码标签 + 耗时 + URL（单行省略）
@@ -241,23 +241,25 @@
 - **接口名称栏**：顶部 Input 输入框（无边框样式），可直接编辑当前请求的名称；保存时同步更新到集合树节点标题
 - **方法选择**：Select 下拉，7 种 HTTP 方法
 - **URL 输入**：支持环境变量占位符 `{{baseUrl}}/api/users`，回车触发发送
+- **cURL 导入**：点击「导入 cURL」按钮打开弹窗，粘贴完整的 curl 命令（支持 `-X`、`-H`、`-d`、`-u`、`-b` 等常用参数），点击「解析并导入」自动解析为当前请求的方法/URL/Headers/QueryParams/Cookies/Body/Auth，填充到编辑器中；解析由 `curlParser.ts` 实现，支持引号包裹、反斜杠转义、多行续行等常见 cURL 格式
 - **快捷键**：`Ctrl+Enter` 或 `Cmd+Enter` 发送请求；`Ctrl+S` 保存当前请求（全局生效，未保存的新请求弹出保存位置选择）
 - **Params/Headers/Cookies Tab**：通用键值对编辑器，每行包含启用开关 + Key + Value + 删除按钮，底部"添加"按钮；Cookies Tab 标签显示启用条目数量
-- **Body Tab**：4 种类型切换按钮（none/json/form-urlenc/raw），JSON 和 raw 模式显示代码编辑区（等宽字体）；JSON 模式下额外显示「格式化」按钮（画笔图标），点击自动美化 JSON 缩进（2 空格），语法有误时静默忽略
+- **Body Tab**：4 种类型切换按钮（none/json/form-urlenc/raw），JSON 和 raw 模式显示代码编辑区（等宽字体）；Body 文本框根据内容自动调整高度（`scrollHeight` 擑高，不显示独立滚动条，滚动统一由参数区域处理）；JSON 模式下额外显示「格式化」按钮（画笔图标），点击自动美化 JSON 缩进（2 空格），语法有误时静默忽略
 - **Auth Tab**：认证类型下拉（无认证/Bearer Token/Basic Auth），根据选择动态显示 Token 输入框或用户名+密码输入框
 
 ### 5.5 响应查看器
 
-- **状态栏**：状态码标签（2xx 绿色/3xx 蓝色/4xx 橙色/5xx 红色/0 网络错误红色）、耗时（ms）、响应大小（B/KB/MB 自动换算）
-- **Body Tab**：JSON 自动格式化（`JSON.stringify` 2 空格缩进），等宽字体，非 JSON 原样显示
-- **Headers Tab**：表格形式展示响应头（Key 加粗，Value 自动换行）
-- 无响应时显示空状态提示"发送请求以查看响应"，发送中显示加载动画
+- **状态栏**：状态码标签（2xx 绿色/3xx 蓝色/4xx 橙色/5xx 红色/0 网络错误红色）、耗时（ms）、响应大小（B/KB/MB 自动换算）；响应体为合法 JSON 时额外显示「已格式化/原始」切换按钮（默认格式化），点击可在美化缩进与原始文本之间切换
+- **Body Tab**：JSON 自动格式化（`JSON.stringify` 2 空格缩进），等宽字体（继承全局字体 CSS 变量 `--ql-font-family`），非 JSON 原样显示；内容区域最大高度 `calc(100vh - 500px)` 并可滚动
+- **Headers Tab**：表格形式展示响应头（Key 加粗，Value 自动换行），标签显示响应头数量
+- 无响应且非请求中时响应区不渲染（请求编辑区占满剩余高度），请求中显示加载动画（Spin）
 
 ### 5.6 环境管理弹窗
 
-- 左右分栏布局：左侧环境列表（含激活标识绿色对勾、删除按钮），右侧编辑区
-- 编辑区包含：环境名称输入框、变量表格（与请求 KV 编辑器相同的交互模式：启用开关 + 变量名 + 值 + 删除）
-- 底部操作按钮：保存 + 激活此环境（非当前激活环境时显示）
+- 左右分栏布局（弹窗支持拖拽调整大小，`resize: both`）：左侧环境列表（含激活标识绿色对勾、删除按钮），右侧编辑区
+- 左侧列表底部操作按钮：「新建环境」（创建名为"新环境"的空环境）、「导入 Postman」（选择 `.json` 文件，校验 `_postman_variable_scope === "environment"`，解析 `name` 与 `values` 数组创建新环境，变量 `enabled` 默认 `true`）
+- 编辑区包含：环境名称输入框、变量表格（与请求 KV 编辑器相同的交互模式：启用开关 + 变量名 + 值 + 删除），顶部「添加变量」按钮
+- 底部操作按钮：保存 + 导出 Postman（将当前环境导出为 `.postman_environment.json` 格式，含 `id/name/values/_postman_variable_scope/_postman_exported_at/_postman_exported_using` 字段）+ 激活此环境（非当前激活环境时显示）
 - 支持新建环境、删除环境
 
 ### 5.7 历史记录面板
@@ -272,7 +274,7 @@
 | ------ | ---- |
 | `Ctrl/Cmd + Enter` | 发送请求（URL 输入框和请求构建器区域均生效） |
 | `Enter`（URL 输入框） | 发送请求 |
-| `Ctrl/Cmd + S` | 保存当前请求（全局生效；未保存的新请求弹出保存位置选择弹窗） |
+| `Ctrl/Cmd + S` | 保存当前请求（CachedPages 架构下仅接口页可见时生效；未保存的新请求弹出保存位置选择弹窗） |
 | `↑/↓`（集合树） | 在可见节点间移动选中 |
 | `←`（集合树） | 收起已展开文件夹 / 跳到父级节点 |
 | `→`（集合树） | 展开文件夹 / 进入首个子节点 |
@@ -289,7 +291,9 @@
 - **导出含版本号**：`version` 字段为后续格式升级预留兼容空间。导入时重新生成 ID 并映射 parentId，确保不同用户间导入不会产生 ID 冲突。
 - **JSON 格式化按钮**：Body 为 JSON 类型时，编辑区旁显示「格式化」按钮（画笔图标），点击调用 `JSON.stringify(parsed, null, 2)` 美化缩进；JSON 语法有误时静默忽略不报错，避免打断用户编辑流程。
 - **Cookies 独立 Tab**：Cookie 键值对与 Params/Headers 共用同一套 KV 编辑器组件，独立为 Tab 便于集中管理；服务端代理将其拼接为 `Cookie` 请求头而非逐条发送，符合 HTTP 协议规范。
-- **cURL 导出**：将当前编辑中的请求（方法/URL/Headers/Cookies/Auth/Body）一键拷贝为 cURL 命令，方便在终端或其他工具中快速复用调试；环境变量在导出时已完成替换。
+- **cURL 双向支持**：将当前编辑中的请求（方法/URL/Headers/Cookies/Auth/Body）一键拷贝为 cURL 命令，方便在终端或其他工具中快速复用调试；同时支持反向导入——粘贴 cURL 命令自动解析填充到编辑器，支持 `-X`/`-H`/`-d`/`-u`/`-b` 等常用参数、引号包裹、反斜杠转义、多行续行等常见格式；环境变量在导出时已完成替换。
 - **Postman Collection 双向兼容**：支持导入 Postman Collection v2.1 格式（`.json` 文件，侧栏「导入 Postman」按钮触发），自动解析文件夹/请求/Headers/Query/Body/Auth 并创建到本地集合树；同时支持将本地集合导出为 Postman Collection v2.1 格式（右键菜单「导出 Postman」或侧栏按钮），生成标准 `.postman_collection.json` 文件，可直接在 Postman 中导入使用。双向转换覆盖 method/url/headers/queryParams/bodyType/body/authType 等核心字段，URL 导出时自动解析为 Postman 结构化对象（protocol/host/port/path/query）。
+- **Postman 环境双向兼容**：环境管理弹窗支持导入 Postman 环境文件（`.postman_environment.json`，校验 `_postman_variable_scope` 字段）与导出当前环境为 Postman 格式，方便在 Postman 与 QuickLink 之间迁移环境变量配置。
+- **响应格式化切换**：响应体为合法 JSON 时，状态栏显示「已格式化/原始」切换按钮，用户可在美化缩进与原始文本之间切换查看，默认格式化显示。
 - **接口名称可编辑**：请求构建器顶部独立名称输入框，用户可直接修改当前请求名称并保存，无需通过右键菜单重命名；新建请求时默认为空，保存时若名称为空则使用「新请求」。
 - **集合树键盘导航**：↑/↓ 在可见节点间移动选中，← 收起已展开文件夹或跳到父级，→ 展开文件夹或进入首个子节点，Enter 加载请求到编辑器；输入框聚焦/弹窗打开/右键菜单/重命名时不生效，避免冲突。

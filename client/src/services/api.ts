@@ -70,6 +70,10 @@ export const linkApi = {
   list: (params?: Record<string, string>) =>
     api.get<ApiResponse<Link[]> & { total: number; totalPages: number }>("/links", { params }).then((r) => r.data),
 
+  // 获取所有链接 (无分页), 按标签分组
+  listAll: () =>
+    api.get<ApiResponse<Record<string, Link[]>> & { tags: Tag[]; tagColumns: Record<string, number> }>("/links/all").then((r) => r.data),
+
   getById: (id: string) => api.get<ApiResponse<Link>>(`/links/${id}`).then((r) => r.data),
 
   create: (data: CreateLinkRequest) =>
@@ -110,9 +114,9 @@ export const linkApi = {
   searchByUrl: (url: string) =>
     api.get<ApiResponse<Link[]>>("/links/search-by-url", { params: { url } }).then((r) => r.data),
 
-  // 批量设置标签
-  batchUpdateTags: (ids: string[], tags: string[], mode?: "set" | "add" | "remove") =>
-    api.put<ApiResponse<{ count: number }>>("/links/batch-tags", { ids, tags, mode }).then((r) => r.data),
+  // 批量设置标签 (单个标签)
+  batchUpdateTags: (ids: string[], tag: string) =>
+    api.put<ApiResponse<{ count: number }>>("/links/batch-tags", { ids, tag }).then((r) => r.data),
 
   // 批量删除
   batchRemove: (ids: string[]) =>
@@ -123,10 +127,10 @@ export const linkApi = {
 export const tagApi = {
   list: () => api.get<ApiResponse<Tag[]>>("/tags").then((r) => r.data),
 
-  create: (data: { name: string; color?: string }) =>
+  create: (data: { name: string; color?: string; columns?: number }) =>
     api.post<ApiResponse<Tag>>("/tags", data).then((r) => r.data),
 
-  update: (id: string, data: { name?: string; color?: string }) =>
+  update: (id: string, data: { name?: string; color?: string; columns?: number }) =>
     api.put<ApiResponse<Tag>>(`/tags/${id}`, data).then((r) => r.data),
 
   remove: (id: string) => api.delete(`/tags/${id}`).then((r) => r.data),

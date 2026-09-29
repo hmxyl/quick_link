@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Dropdown,
@@ -40,6 +40,7 @@ import type { Attachment, Note } from "../../types";
 import { noteApi, attachmentApi, downloadBlob } from "../../services/api";
 import NoteViewer from "./NoteViewer";
 import AttachmentManager from "./AttachmentManager";
+import { usePageVisibility } from "../../hooks/usePageVisibility";
 
 const { Search } = Input;
 
@@ -54,6 +55,8 @@ interface CtxMenuState {
 
 const NotesPage: React.FC = () => {
   const { token } = theme.useToken();
+  // 页面可见性: CachedPages 架构下页面不卸载, 通过 isActive 释放重型资源 (Milkdown 编辑器)
+  const isActive = usePageVisibility("/notes");
   const [notes, setNotes] = useState<Note[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +79,7 @@ const NotesPage: React.FC = () => {
   );
   const importInputRef = useRef<HTMLInputElement>(null);
   const treeRef = useRef<any>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const active = useMemo(() => notes.filter((n) => !n.deletedAt), [notes]);
   const trash = useMemo(
@@ -109,10 +113,19 @@ const NotesPage: React.FC = () => {
     loadAll();
   }, []);
 
-  // 默认展开所有文件夹
+  // 清理滚动 timer
   useEffect(() => {
-    setExpandedKeys(active.filter((n) => n.type === "folder").map((n) => n._id));
-  }, [notes.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
+  }, []);
+
+  // 默认展开所有文件夹
+  // 依赖 active (文件夹列表) 而非 notes.length, 避免删除/新增时计数不变导致不刷新
+  const folderIds = useMemo(() => active.filter((n) => n.type === "folder").map((n) => n._id).join(","), [active]);
+  useEffect(() => {
+    setExpandedKeys(folderIds.split(",").filter(Boolean));
+  }, [folderIds]);
 
   // 搜索时展开全部文件夹, 保证命中项可见
   useEffect(() => {
@@ -284,9 +297,9 @@ const NotesPage: React.FC = () => {
       items.push({ key: "delete", icon: <DeleteOutlined />, label: "删除", danger: true });
     }
     return items;
-  }, [ctxMenu, notes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ctxMenu]); // ctxMenu.node 已包含所需信息, 无需依赖 notes
 
-  const handleCtxMenuClick = useCallback(({ key }: { key: string }) => {
+  const handleCtxMenuClick = ({ key }: { key: string }) => {
     if (!ctxMenu) return;
     const node = ctxMenu.node;
     setCtxMenu(null);
@@ -328,7 +341,7 @@ const NotesPage: React.FC = () => {
         break;
       case "delete": if (node) softDelete(node); break;
     }
-  }, [ctxMenu]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
   // ---- 树构建 ----
   // 同级顺序以服务端返回为准 (自定义排序优先, 无自定义时文件夹在前+中文名)
@@ -403,43 +416,47 @@ const NotesPage: React.FC = () => {
   }, [active, expandedKeys, visibleIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 键盘上下左右: 选中移动 / 文件夹收起展开 (输入框聚焦与弹窗打开时不生效)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (view !== "library") return;
-      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return;
-      const el = document.activeElement as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
-      if (ctxMenu || renameTarget) return;
-      if (!visibleList.length) return;
-      e.preventDefault();
-      const idx = visibleList.findIndex((n) => n._id === selectedId);
-      const cur = idx >= 0 ? visibleList[idx] : null;
-      const moveTo = (n?: Note) => {
-        if (!n) return;
-        setSelectedId(n._id);
-        (treeRef.current as any)?.scrollTo?.({ key: n._id });
-      };
-      if (e.key === "ArrowDown") return moveTo(idx >= 0 && idx < visibleList.length - 1 ? visibleList[idx + 1] : visibleList[0]);
-      if (e.key === "ArrowUp") return moveTo(idx > 0 ? visibleList[idx - 1] : visibleList[visibleList.length - 1]);
-      if (!cur) return moveTo(visibleList[0]);
-      if (e.key === "ArrowRight") {
-        if (cur.type === "folder" && !expandedKeys.includes(cur._id)) {
-          setExpandedKeys((prev) => [...prev, cur._id]);
-        } else if (cur.type === "folder") {
-          moveTo(visibleList[idx + 1]); // 已展开时第一个子节点紧随其后
-        }
-      } else {
-        // ArrowLeft: 已展开先收起, 否则跳到父级
-        if (cur.type === "folder" && expandedKeys.includes(cur._id)) {
-          setExpandedKeys((prev) => prev.filter((k) => k !== cur._id));
-        } else if (cur.parentId) {
-          moveTo(visibleList.find((n) => n._id === cur.parentId));
-        }
-      }
+  // 用 ref 持有最新回调, 避免状态变化时反复注册/注销全局监听器
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  onKeyRef.current = (e: KeyboardEvent) => {
+    if (!isActive) return;
+    if (view !== "library") return;
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return;
+    const el = document.activeElement as HTMLElement | null;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+    if (ctxMenu || renameTarget) return;
+    if (!visibleList.length) return;
+    e.preventDefault();
+    const idx = visibleList.findIndex((n) => n._id === selectedId);
+    const cur = idx >= 0 ? visibleList[idx] : null;
+    const moveTo = (n?: Note) => {
+      if (!n) return;
+      setSelectedId(n._id);
+      (treeRef.current as any)?.scrollTo?.({ key: n._id });
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [view, visibleList, selectedId, expandedKeys, ctxMenu, renameTarget]);
+    if (e.key === "ArrowDown") return moveTo(idx >= 0 && idx < visibleList.length - 1 ? visibleList[idx + 1] : visibleList[0]);
+    if (e.key === "ArrowUp") return moveTo(idx > 0 ? visibleList[idx - 1] : visibleList[visibleList.length - 1]);
+    if (!cur) return moveTo(visibleList[0]);
+    if (e.key === "ArrowRight") {
+      if (cur.type === "folder" && !expandedKeys.includes(cur._id)) {
+        setExpandedKeys((prev) => [...prev, cur._id]);
+      } else if (cur.type === "folder") {
+        moveTo(visibleList[idx + 1]); // 已展开时第一个子节点紧随其后
+      }
+    } else {
+      // ArrowLeft: 已展开先收起, 否则跳到父级
+      if (cur.type === "folder" && expandedKeys.includes(cur._id)) {
+        setExpandedKeys((prev) => prev.filter((k) => k !== cur._id));
+      } else if (cur.parentId) {
+        moveTo(visibleList.find((n) => n._id === cur.parentId));
+      }
+    }
+  };
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => onKeyRef.current(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // ---- 附件跳转笔记 ----
 
@@ -460,7 +477,8 @@ const NotesPage: React.FC = () => {
       }
       return Array.from(set);
     });
-    setTimeout(() => (treeRef.current as any)?.scrollTo?.({ key: ids[0] }), 100);
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => (treeRef.current as any)?.scrollTo?.({ key: ids[0] }), 100);
   };
 
   // ---- 拖拽排序/移动 ----
@@ -753,6 +771,7 @@ const NotesPage: React.FC = () => {
             attachments={attachments}
             onNoteChanged={loadNotes}
             onAttachmentsChanged={loadAttachments}
+            isActive={isActive}
           />
         ) : (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>

@@ -61,13 +61,11 @@ export const LinkIcon: React.FC<{ icon?: string; url?: string; size?: number }> 
 
 // Icon picker for the link form (controlled by antd Form.Item)
 // Accepts optional `url` prop to fetch favicon from the current URL
-// Accepts optional `customIcons` prop to display user's custom icons
 export const IconPicker: React.FC<{
   value?: string;
   onChange?: (value: string | undefined) => void;
   url?: string;
-  customIcons?: { _id: string; url: string; label?: string }[];
-}> = ({ value, onChange, url, customIcons = [] }) => {
+}> = ({ value, onChange, url }) => {
   const [imgError, setImgError] = React.useState(false);
   const [faviconUrl, setFaviconUrl] = React.useState<string | null>(null);
   const [faviconLoading, setFaviconLoading] = React.useState(false);
@@ -144,21 +142,7 @@ export const IconPicker: React.FC<{
           ...
         </div>
       )}
-      {/* Custom icons from user's library */}
-      {customIcons.map(({ _id, url: iconUrl, label }) => (
-        <div
-          key={_id}
-          onClick={() => onChange?.(value === iconUrl ? undefined : iconUrl)}
-          title={label || "自定义图标"}
-          style={{
-            width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
-            border: value === iconUrl ? `2px solid ${token.colorPrimary}` : `2px solid ${token.colorSuccess}`,
-            borderRadius: 6, cursor: "pointer", background: value === iconUrl ? token.colorPrimaryBg : token.colorBgContainer,
-          }}
-        >
-          <img src={iconUrl} style={{ width: 20, height: 20, borderRadius: 3 }} alt={label || "自定义图标"} />
-        </div>
-      ))}
+      {/* Built-in icon library */}
       {ICON_LIBRARY.map(({ name, label, Icon, color }) => (
         <div
           key={name}
