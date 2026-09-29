@@ -7,7 +7,7 @@ import { Tag } from "../../types";
 export async function list(req: AuthRequest, res: Response): Promise<void> {
   try {
     const tags: Tag[] = await new Promise((resolve, reject) => {
-      db.tags.find({ userId: req.userId }).sort({ name: 1 }).exec((err, docs) => {
+      db.tags.find({ userId: req.userId }).sort({ sortOrder: 1, name: 1 }).exec((err, docs) => {
         if (err) reject(err);
         else resolve(docs as Tag[]);
       });
@@ -41,12 +41,22 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
       return;
     }
 
+    // 新标签追加到末尾
+    const allTags: Tag[] = await new Promise((resolve, reject) => {
+      db.tags.find({ userId: req.userId }).exec((err, docs) => {
+        if (err) reject(err);
+        else resolve(docs as Tag[]);
+      });
+    });
+    const maxSort = allTags.reduce((m, t) => Math.max(m, t.sortOrder ?? 0), -1);
+
     const tag: Tag = {
       _id: uuidv4(),
       userId: req.userId!,
       name,
       color,
-      columns: columns !== undefined ? Number(columns) : 3,
+      columns: columns !== undefined ? Number(columns) : 5,
+      sortOrder: maxSort + 1,
       createdAt: new Date().toISOString(),
     };
 
@@ -101,6 +111,35 @@ export async function update(req: AuthRequest, res: Response): Promise<void> {
     });
 
     res.json({ success: true, data: tag });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export async function reorder(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: "ids array is required" });
+      return;
+    }
+
+    // 按传入顺序重写 sortOrder
+    for (let i = 0; i < ids.length; i++) {
+      await new Promise<void>((resolve, reject) => {
+        db.tags.update(
+          { _id: ids[i], userId: req.userId },
+          { $set: { sortOrder: i } },
+          {},
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+    }
+
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

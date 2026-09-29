@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { List, Button, Modal, Form, Input, InputNumber, ColorPicker, message, Popconfirm, Tag as AntTag } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined } from "@ant-design/icons";
 import { tagApi } from "../../services/api";
 import type { Tag } from "../../types";
 
@@ -40,8 +40,24 @@ const TagManager: React.FC<{
 
   const handleEdit = (tag: Tag) => {
     setEditingTag(tag);
-    form.setFieldsValue({ name: tag.name, color: tag.color, columns: tag.columns ?? 3 });
+    form.setFieldsValue({ name: tag.name, color: tag.color, columns: tag.columns ?? 5 });
     setEditModalOpen(true);
+  };
+
+  // 上移/下移标签: 本地重排后提交新顺序
+  const handleMove = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= tags.length) return;
+    const next = [...tags];
+    [next[index], next[target]] = [next[target], next[index]];
+    setTags(next);
+    try {
+      await tagApi.reorder(next.map((t) => t._id));
+      onChanged();
+    } catch {
+      message.error("排序保存失败");
+      loadTags();
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -59,7 +75,7 @@ const TagManager: React.FC<{
     try {
       const values = await form.validateFields();
       const color = typeof values.color === "string" ? values.color : values.color?.toHexString?.() || "#1677ff";
-      const payload: any = { name: values.name, color, columns: values.columns ?? 3 };
+      const payload: any = { name: values.name, color, columns: values.columns ?? 5 };
       if (editingTag) {
         await tagApi.update(editingTag._id, payload);
         message.success("标签已更新");
@@ -94,9 +110,23 @@ const TagManager: React.FC<{
         loading={loading}
         dataSource={tags}
         locale={{ emptyText: "暂无标签" }}
-        renderItem={(tag) => (
+        renderItem={(tag, index) => (
           <List.Item
             actions={[
+              <Button
+                key="up"
+                size="small"
+                icon={<ArrowUpOutlined />}
+                disabled={index === 0}
+                onClick={() => handleMove(index, -1)}
+              />,
+              <Button
+                key="down"
+                size="small"
+                icon={<ArrowDownOutlined />}
+                disabled={index === tags.length - 1}
+                onClick={() => handleMove(index, 1)}
+              />,
               <Button key="edit" size="small" icon={<EditOutlined />} onClick={() => handleEdit(tag)} />,
               <Popconfirm key="delete" title="确定删除此标签？" onConfirm={() => handleDelete(tag._id)}>
                 <Button size="small" danger icon={<DeleteOutlined />} />
@@ -104,14 +134,14 @@ const TagManager: React.FC<{
             ]}
           >
             <AntTag color={tag.color || "default"}>{tag.name}</AntTag>
-            <span style={{ marginLeft: 8, fontSize: 12, color: "#999" }}>每行 {tag.columns ?? 3} 个</span>
+            <span style={{ marginLeft: 8, fontSize: 12, color: "#999" }}>每行 {tag.columns ?? 5} 个</span>
           </List.Item>
         )}
       />
 
       {/* Add/Edit Tag Modal (nested) */}
       <Modal title={editingTag ? "编辑标签" : "添加标签"} open={editModalOpen} onOk={handleSubmit} onCancel={() => setEditModalOpen(false)}>
-        <Form form={form} layout="vertical" initialValues={{ color: "#1677ff", columns: 3 }}>
+        <Form form={form} layout="vertical" initialValues={{ color: "#1677ff", columns: 5 }}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入标签名称" }]}>
             <Input />
           </Form.Item>

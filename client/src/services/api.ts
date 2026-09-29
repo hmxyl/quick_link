@@ -133,6 +133,10 @@ export const tagApi = {
   update: (id: string, data: { name?: string; color?: string; columns?: number }) =>
     api.put<ApiResponse<Tag>>(`/tags/${id}`, data).then((r) => r.data),
 
+  // 按传入的 id 顺序重写标签排序
+  reorder: (ids: string[]) =>
+    api.put<ApiResponse<null>>("/tags/reorder", { ids }).then((r) => r.data),
+
   remove: (id: string) => api.delete(`/tags/${id}`).then((r) => r.data),
 };
 

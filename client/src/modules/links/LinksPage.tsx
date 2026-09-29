@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, Form, Input, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Card } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
@@ -416,8 +416,23 @@ const LinksPage: React.FC = () => {
 
   // 链接卡片设置菜单 (悬浮显示) - 使用外部定义的稳定组件引用
 
-  // 获取所有标签名 (按出现顺序)
-  const tagNames = Object.keys(groupedLinks);
+  // 获取所有标签名: 优先按标签管理中的排序 (tagList 已按 sortOrder 排序),
+  // 再追加未在标签列表中的分组 (如 "其他" 或遗留标签)
+  const tagNames = useMemo(() => {
+    const present = new Set(Object.keys(groupedLinks));
+    const ordered: string[] = [];
+    for (const t of tagList) {
+      if (present.has(t.name)) {
+        ordered.push(t.name);
+        present.delete(t.name);
+      }
+    }
+    // 剩余未匹配到标签列表的分组
+    for (const name of Object.keys(groupedLinks)) {
+      if (present.has(name)) ordered.push(name);
+    }
+    return ordered;
+  }, [groupedLinks, tagList]);
 
   return (
     <div>
@@ -468,7 +483,7 @@ const LinksPage: React.FC = () => {
       ) : (
         tagNames.map((tagName) => {
           const links = groupedLinks[tagName];
-          const cols = tagColumns[tagName] ?? 3;
+          const cols = tagColumns[tagName] ?? 5;
           const tagInfo = tagList.find((t) => t.name === tagName);
           const tagColor = tagInfo?.color;
 

@@ -229,7 +229,7 @@ export async function listAll(req: AuthRequest, res: Response): Promise<void> {
         });
       }),
       new Promise<any[]>((resolve, reject) => {
-        db.tags.find({ userId: req.userId }).sort({ name: 1 }).exec((err, docs) => {
+        db.tags.find({ userId: req.userId }).sort({ sortOrder: 1, name: 1 }).exec((err, docs) => {
           if (err) reject(err);
           else resolve(docs as any[]);
         });
@@ -239,7 +239,7 @@ export async function listAll(req: AuthRequest, res: Response): Promise<void> {
     // 构建标签名 -> 列数映射
     const tagColumnsMap = new Map<string, number>();
     for (const t of tags) {
-      tagColumnsMap.set(t.name, t.columns ?? 3);
+      tagColumnsMap.set(t.name, t.columns ?? 5);
     }
 
     // 解析每个链接的标签: 优先 tag 字段, 其次 tags[0], 默认 "其他"
@@ -273,13 +273,13 @@ export async function listAll(req: AuthRequest, res: Response): Promise<void> {
 
     // 确保 "其他" 标签存在
     if (!tagColumnsMap.has("其他")) {
-      tagColumnsMap.set("其他", 3);
+      tagColumnsMap.set("其他", 5);
     }
 
     res.json({
       success: true,
       data: grouped,
-      tags: tags.map((t: any) => ({ name: t.name, color: t.color, columns: t.columns ?? 3 })),
+      tags: tags.map((t: any) => ({ name: t.name, color: t.color, columns: t.columns ?? 5, sortOrder: t.sortOrder ?? 0 })),
       tagColumns: Object.fromEntries(tagColumnsMap),
     });
   } catch (err: any) {

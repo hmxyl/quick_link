@@ -8,6 +8,7 @@ router.use(authMiddleware);
 
 router.get("/", tagController.list);
 router.post("/", tagController.create);
+router.put("/reorder", tagController.reorder);
 router.put("/:id", tagController.update);
 router.delete("/:id", tagController.remove);
 

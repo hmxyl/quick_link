@@ -40,7 +40,8 @@ export interface Tag {
   _id: string;
   name: string;
   color?: string;
-  columns?: number;    // 每行展示链接数, 默认 3
+  columns?: number;    // 每行展示链接数, 默认 5
+  sortOrder?: number;  // 标签排序值, 越小越靠前
   createdAt: string;
 }
 
