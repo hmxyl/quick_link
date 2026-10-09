@@ -1,9 +1,7 @@
 import React, { useState } from "react";
-import { Layout, Menu, Button, Dropdown, Typography, theme } from "antd";
+import { Layout, Menu, Button, Typography, theme } from "antd";
 import {
   LinkOutlined,
-  LogoutOutlined,
-  UserOutlined,
   SettingOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -11,7 +9,6 @@ import {
   ApiOutlined,
 } from "@ant-design/icons";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useAuthStore } from "../stores/authStore";
 import SettingsModal from "../modules/user/SettingsModal";
 
 const { Sider, Content } = Layout;
@@ -28,7 +25,6 @@ const bottomBtnStyle: React.CSSProperties = {
 const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
   const { token } = theme.useToken();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 初始值读取上次保存的状态
@@ -48,12 +44,6 @@ const AppLayout: React.FC = () => {
     { key: "/notes", icon: <FileMarkdownOutlined />, label: "笔记管理" },
     { key: "/api", icon: <ApiOutlined />, label: "接口管理" },
   ];
-
-  const userMenu = {
-    items: [
-      { key: "logout", icon: <LogoutOutlined />, label: "退出登录", onClick: () => { logout(); navigate("/login"); } },
-    ],
-  };
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -76,9 +66,9 @@ const AppLayout: React.FC = () => {
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
-          style={{ paddingBottom: 136 }}
+          style={{ paddingBottom: 92 }}
         />
-        {/* 底部操作区: 设置 / 用户信息 / 收起展开 */}
+        {/* 底部操作区: 设置 (含账号信息/退出登录) / 收起展开 */}
         <div
           style={{
             position: "absolute",
@@ -96,11 +86,6 @@ const AppLayout: React.FC = () => {
             onClick={() => setSettingsOpen(true)}
             style={bottomBtnStyle}
           />
-          <Dropdown menu={userMenu} placement="topRight" trigger={["click"]}>
-            <Button type="text" block title={user?.username} style={bottomBtnStyle}>
-              {collapsed ? <UserOutlined /> : <><UserOutlined /> {user?.username}</>}
-            </Button>
-          </Dropdown>
           <Button
             type="text"
             block

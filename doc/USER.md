@@ -4,7 +4,7 @@
 
 ## 1. 功能概览
 
-注册/登录（记住密码/自动登录）、登录密码可凭注册邮箱找回、修改登录密码、外观主题（跟随系统/浅色/深色）、全局字体选择、开机自启（桌面版）、退出登录。
+注册/登录（记住密码/自动登录）、登录密码可凭注册邮箱找回、修改登录密码、外观主题（跟随系统/浅色/深色）、全局字体选择、开机自启（桌面版）、账号信息（用户名/注册邮箱）与退出登录（均并入设置弹窗）。
 
 > 主密码功能已于 2026-08 全局移除：账号凭据改为明文存储、可直接查看，详见 §6。
 
@@ -13,8 +13,8 @@
 | 端 | 目录 | 文件 |
 | -- | ---- | ---- |
 | 服务端 | `server/src/modules/user/` | `authController.ts`、`routes.ts` |
-| 前端 | `client/src/modules/user/` | `LoginPage.tsx`（含忘记密码）、`RegisterPage.tsx`、`SettingsModal.tsx`（设置弹窗） |
-| 前端（共享） | `client/src/` | `stores/authStore.ts`（Zustand 认证态）、`stores/themeStore.ts`（Zustand 外观主题态）、`services/settings.ts`（本地设置与凭据记忆）、`layout/AppLayout.tsx`（用户下拉） |
+| 前端 | `client/src/modules/user/` | `LoginPage.tsx`（含忘记密码）、`RegisterPage.tsx`、`SettingsModal.tsx`（设置弹窗，含账号信息与退出登录） |
+| 前端（共享） | `client/src/` | `stores/authStore.ts`（Zustand 认证态）、`stores/themeStore.ts`（Zustand 外观主题态）、`services/settings.ts`（本地设置与凭据记忆）、`layout/AppLayout.tsx`（侧栏布局，底部仅设置/收起展开两个按钮） |
 
 ## 2. 数据模型
 
@@ -56,12 +56,13 @@
 - **登录页**：用户名+密码，提供记住密码/自动登录勾选与「忘记密码」（凭用户名+注册邮箱重置）。
 - **注册页**：用户名/邮箱/登录密码（至少 8 位）+ 确认密码。
 - **记住密码/自动登录**：纯客户端能力，凭据 base64 轻度混淆存 `localStorage[quicklink:savedCredentials]`；自动登录仅启动且无 token 时静默尝试一次；与设置弹窗开关联动。
-- **主侧栏用户下拉**：退出登录。
-- **设置弹窗**：外观主题（跟随系统/浅色/深色，默认跟随系统，背景色随系统深浅色自动切换）、开机自启（仅桌面版，Web 禁用并提示）、记住密码、自动登录、全局字体（预设字体选项：IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体，亦支持自定义输入，留空使用默认字体；选中后实时生效，通过 CSS 变量 `--ql-font-family` 全局继承）；均存 `localStorage quicklink:settings`（主题态另由 `themeStore` 响应式分发，机制见 [BUILD.md §8](./BUILD.md)）。
+- **设置弹窗**：首行为**账号信息**（头像 + 当前登录用户名 + 「注册邮箱：xxx」，打开弹窗时调 `GET /api/auth/me` 刷新），其后依次为外观主题（跟随系统/浅色/深色，默认跟随系统，背景色随系统深浅色自动切换）、开机自启（仅桌面版，Web 禁用并提示）、记住密码、自动登录、全局字体（预设字体选项：IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体，亦支持自定义输入，留空使用默认字体；选中后实时生效，通过 CSS 变量 `--ql-font-family` 全局继承），末行为**退出登录**（danger 按钮 + Popconfirm 二次确认，确认后 `logout()` 清本地 token/user 并跳 `/login`，不动已保存凭据）；设置项均存 `localStorage quicklink:settings`（主题态另由 `themeStore` 响应式分发，机制见 [BUILD.md §8](./BUILD.md)）。
+- **主侧栏**：底部仅保留「设置」与「收起/展开」两个按钮；原「用户信息」下拉入口（用户名 + 退出登录）已合并进设置弹窗（2026-10）。
 - **认证态**：Zustand `authStore`（`user / token / isAuthenticated / login / register / logout / autoLogin`）；请求拦截自动附加 `Authorization: Bearer`；401 自动清理并跳登录（登录/注册页豁免）。
 
 ## 6. 设计决策
 
+- **用户信息并入设置弹窗（2026-10）**：侧栏原「用户信息」下拉只承载单一动作（退出登录），与设置弹窗同属账号/偏好类操作，故合并到设置弹窗首尾两行（账号信息展示 + 退出登录），侧栏底部减为一个入口，降低导航区拥挤。
 - **bcryptjs 替代 bcrypt**：原生 bcrypt 依赖 node-gyp/C++ 工具链；bcryptjs 纯 JS，跨平台一致，且随桌面包免重建。
 - **移除主密码（2026-08）**：单机个人工具场景下主密码交互成本高（每次查看凭据均需输入），收益有限，故全局移除：删除主密码设置/修改/重置接口与前端弹窗，凭据改为明文存储、直接查看；同步删除 `ENCRYPTION_SALT` 配置与 AES 加解密实现。存量旧版密文无法迁移，接口以占位提示呈现（`isLegacyCipher` 识别）。
 - **记住密码/自动登录本地凭据**：单机个人工具，威胁模型为本机其他应用读取浏览器存储；base64 混淆仅为避免明文裸奔。自动登录仅启动时一次；开机自启为系统级的能力仅桌面版生效。

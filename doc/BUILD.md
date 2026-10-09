@@ -58,7 +58,7 @@ quick_link/
 │   │   │   ├── notes/          # 笔记管理: NotesPage / NoteViewer / MilkdownEditor / AttachmentManager / imageSize
 │   │   │   ├── user/           # 用户信息管理: LoginPage / RegisterPage / SettingsModal
 │   │   │   └── api/            # 接口管理: ApiPage / ApiSidebar / RequestBuilder / ResponseViewer / EnvironmentModal / curlParser
-│   │   ├── layout/             # AppLayout 侧栏+顶栏 (收起记忆, 用户下拉仅退出登录)
+│   │   ├── layout/             # AppLayout 侧栏+顶栏 (收起记忆, 底部仅设置/收起展开; 用户信息已并入设置弹窗)
 │   │   ├── services/           # api.ts (axios 封装) / settings.ts (本地设置与凭据记忆)
 │   │   ├── hooks/              # usePageVisibility (CachedPages 页面可见性 Context + hook)
 │   │   ├── stores/authStore.ts # Zustand 认证态; themeStore.ts # 外观主题 (跟随系统/浅/深)
@@ -221,7 +221,7 @@ npm run migrate:status    # 查看状态
 
 ### 8.2 布局与通用
 
-- 侧栏底部依次为：设置按钮、用户下拉（退出登录）、收起/展开按钮（`localStorage quicklink:siderCollapsed` 记忆）。
+- 侧栏底部依次为：设置按钮、收起/展开按钮（`localStorage quicklink:siderCollapsed` 记忆）；账号信息（用户名/注册邮箱）与退出登录均位于设置弹窗内（见 [USER.md §5](./USER.md)）。
 - 外观主题：设置弹窗选 跟随系统/浅色/深色（默认跟随系统，`prefers-color-scheme` 变化实时切换）；App 据 `isDark` 切换 antd `darkAlgorithm` 并同步 `html[data-theme]`/`color-scheme`/body 背景；自定义样式（markdown 预览、Milkdown Crepe 变量）经 `html[data-theme="dark"]` 覆盖；业务组件一律用 `theme.useToken()` 取色，禁写死浅色值。
 - 全局字体：设置弹窗可选预设字体（IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体）或自定义输入；选中后写入 `AppSettings.fontFamily`（`localStorage quicklink:settings`），App 将其应用到 `document.body.style.fontFamily`、antd `ConfigProvider` token 及 CSS 变量 `--ql-font-family`（供子组件如接口管理代码区继承）；设置页修改后通过自定义事件 `quicklink:settings-changed` 在同标签页内实时同步，无需刷新。
 - 请求拦截：自动附加 `Authorization: Bearer`；开发环境 Vite proxy `/api` → `localhost:3000`；服务端错误文案统一简体中文。

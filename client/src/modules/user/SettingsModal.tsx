@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Switch, Radio, Select, message, Typography, theme } from "antd";
+import { Avatar, Button, Modal, Popconfirm, Switch, Radio, Select, message, Typography, theme } from "antd";
+import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import { getSettings, saveSettings, isDesktop } from "../../services/settings";
 import type { AppSettings, ThemeMode } from "../../services/settings";
 import { useThemeStore } from "../../stores/themeStore";
+import { useAuthStore } from "../../stores/authStore";
 
 const { Text } = Typography;
 
@@ -35,14 +38,17 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
   const [autoLaunchLoading, setAutoLaunchLoading] = useState(false);
   const desktop = isDesktop();
   const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
+  const { user, logout, fetchUser } = useAuthStore();
   const { token } = theme.useToken();
+  const navigate = useNavigate();
   // 分隔线颜色随主题适配 (浅色 #f0f0f0 / 深色 token)
   const rowStyle: React.CSSProperties = { ...rowBase, borderBottom: `1px solid ${token.colorBorderSecondary}` };
 
-  // 打开时刷新本地设置; 桌面环境下读取系统开机自启状态
+  // 打开时刷新本地设置与账号信息 (原侧栏用户信息入口合并至此); 桌面环境下读取系统开机自启状态
   useEffect(() => {
     if (!open) return;
     setSettings(getSettings());
+    fetchUser();
     if (window.quicklink) {
       window.quicklink
         .getAutoLaunch()
@@ -65,6 +71,12 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    onClose();
+    navigate("/login", { replace: true });
+  };
+
   const handleRemember = (checked: boolean) => {
     // 关闭记住密码时联动关闭自动登录
     setSettings(saveSettings({ rememberPassword: checked, autoLogin: checked ? settings.autoLogin : false }));
@@ -77,6 +89,23 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
 
   return (
     <Modal title="设置" open={open} onCancel={onClose} footer={null} width={440} destroyOnClose>
+      {/* 账号信息: 当前登录用户名与注册邮箱 */}
+      <div style={rowStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <Avatar
+            size={40}
+            style={{ backgroundColor: token.colorPrimary, flexShrink: 0 }}
+            icon={<UserOutlined />}
+          />
+          <div style={{ minWidth: 0 }}>
+            <Text strong style={{ fontSize: 15 }}>{user?.username || "未登录"}</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 12, wordBreak: "break-all" }}>
+              注册邮箱：{user?.email || "未设置"}
+            </Text>
+          </div>
+        </div>
+      </div>
       <div style={rowStyle}>
         <div>
           <Text strong>外观主题</Text>
@@ -147,7 +176,7 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
           onClear={() => setSettings(saveSettings({ fontFamily: "" }))}
         />
       </div>
-      <div style={{ ...rowStyle, borderBottom: "none" }}>
+      <div style={rowStyle}>
         <div>
           <Text strong>自动登录</Text>
           <br />
@@ -156,6 +185,26 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
           </Text>
         </div>
         <Switch checked={settings.autoLogin} onChange={handleAutoLogin} />
+      </div>
+      {/* 退出登录 (原侧栏用户下拉入口合并至此) */}
+      <div style={{ ...rowStyle, borderBottom: "none" }}>
+        <div>
+          <Text strong>退出登录</Text>
+          <br />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            清除本机登录状态，返回登录页
+          </Text>
+        </div>
+        <Popconfirm
+          title="确定退出登录？"
+          description="本地保存的账号密码不会被删除"
+          okText="退出"
+          cancelText="取消"
+          placement="topRight"
+          onConfirm={handleLogout}
+        >
+          <Button danger icon={<LogoutOutlined />}>退出登录</Button>
+        </Popconfirm>
       </div>
     </Modal>
   );
