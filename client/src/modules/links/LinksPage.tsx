@@ -27,6 +27,21 @@ if (typeof document !== "undefined" && !document.querySelector('[data-ql-links]'
   document.head.appendChild(style);
 }
 
+// 打开链接: http(s) 直接新标签页打开; file:// 无法从 http 页面打开 (浏览器安全策略拦截,
+// 原先依赖的 Electron shell.openExternal 已随桌面版移除), 改为复制真实本地路径供粘贴到资源管理器。
+// 返回是否已成功打开, 供调用方决定提示文案。
+const openLinkUrl = (url: string): boolean => {
+  if (!url.startsWith("file://")) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return true;
+  }
+  // file:///C:/x -> C:/x; file:////server/share -> //server/share (资源管理器地址栏可识别)
+  const localPath = decodeURIComponent(url.replace(/^file:\/\//, "").replace(/^\/(?=[A-Za-z]:)/, ""));
+  navigator.clipboard.writeText(localPath);
+  message.info("浏览器无法直接打开本地文件，路径已复制到剪贴板");
+  return false;
+};
+
 // 链接卡片悬浮设置按钮 (提取到组件外部, 避免每次渲染时重新定义导致完全卸载/重建)
 interface LinkSettingsProps {
   link: Link;
@@ -323,13 +338,10 @@ const LinksPage: React.FC = () => {
   };
 
   const handleCopyAndOpen = (url: string) => {
-    navigator.clipboard.writeText(url);
-    if (window.quicklink?.openExternal) {
-      window.quicklink.openExternal(url);
-    } else {
-      window.open(url, "_blank", "noopener,noreferrer");
+    if (openLinkUrl(url)) {
+      navigator.clipboard.writeText(url);
+      message.success("地址已复制，并在新标签页打开");
     }
-    message.success("地址已复制，并用系统浏览器打开");
   };
 
   const handleClearAll = async () => {
@@ -407,11 +419,7 @@ const LinksPage: React.FC = () => {
   // 打开链接
   const openLink = (link: Link) => {
     if (!link.url) return;
-    if (window.quicklink?.openExternal) {
-      window.quicklink.openExternal(link.url);
-    } else {
-      window.open(link.url, "_blank", "noopener,noreferrer");
-    }
+    openLinkUrl(link.url);
   };
 
   // 链接卡片设置菜单 (悬浮显示) - 使用外部定义的稳定组件引用

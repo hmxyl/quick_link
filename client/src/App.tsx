@@ -4,6 +4,7 @@ import { ConfigProvider, Spin, theme } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useAuthStore } from "./stores/authStore";
 import { useThemeStore } from "./stores/themeStore";
+import { useCapabilityStore } from "./stores/capabilityStore";
 import { getSettings, type AppSettings } from "./services/settings";
 import AppLayout from "./layout/AppLayout";
 import { PageVisibilityContext } from "./hooks/usePageVisibility";
@@ -88,6 +89,11 @@ const App: React.FC = () => {
     if (ready) return;
     useAuthStore.getState().autoLogin().finally(() => setReady(true));
   }, [ready]);
+
+  // 探测服务端能力 (是否运行在 Windows 服务的 session 0 中), 决定桌面专属入口是否显示
+  useEffect(() => {
+    useCapabilityStore.getState().load();
+  }, []);
 
   // 外观主题: 跟随系统/浅色/深色; data-theme 驱动自定义 CSS (markdown.css) 的深色覆盖
   const isDark = useThemeStore((s) => s.isDark);

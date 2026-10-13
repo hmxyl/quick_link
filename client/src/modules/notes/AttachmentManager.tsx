@@ -8,6 +8,7 @@ import {
 } from "@ant-design/icons";
 import type { Attachment, Note } from "../../types";
 import { attachmentApi } from "../../services/api";
+import { useCapabilityStore } from "../../stores/capabilityStore";
 
 const { Text } = Typography;
 
@@ -28,6 +29,8 @@ interface Props {
 const AttachmentManager: React.FC<Props> = ({ open, onClose, notes, onOpenNotes }) => {
   const [list, setList] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(false);
+  // 服务模式下服务端处于 session 0, 打不开用户桌面的资源管理器窗口, 隐藏该按钮
+  const launchNativeGui = useCapabilityStore((s) => s.launchNativeGui);
 
   const load = async () => {
     setLoading(true);
@@ -106,9 +109,11 @@ const AttachmentManager: React.FC<Props> = ({ open, onClose, notes, onOpenNotes 
               onClick={() => attachmentApi.download(rec._id, rec.originalName)}
             />
           </Tooltip>
-          <Tooltip title="打开所在文件夹">
-            <Button type="link" size="small" icon={<FolderOpenOutlined />} onClick={() => openFolder(rec)} />
-          </Tooltip>
+          {launchNativeGui && (
+            <Tooltip title="打开所在文件夹">
+              <Button type="link" size="small" icon={<FolderOpenOutlined />} onClick={() => openFolder(rec)} />
+            </Tooltip>
+          )}
           <Tooltip title="打开所属笔记">
             <Button type="link" size="small" icon={<FileMarkdownOutlined />} onClick={() => openNotes(rec)} />
           </Tooltip>

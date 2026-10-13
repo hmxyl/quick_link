@@ -5,7 +5,11 @@ node_modules/
 dist/
 build/
 server/prod_modules/
+server/.prod_tmp/
 desktop/release/
+installer/stage/
+installer/.cache/
+installer/release/
 
 # Environment
 .env

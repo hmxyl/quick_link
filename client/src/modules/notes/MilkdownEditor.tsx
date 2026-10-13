@@ -527,11 +527,7 @@ const MilkdownEditor = forwardRef<MilkdownEditorHandle, Props>(({ defaultValue, 
     const href = target.getAttribute("href");
     if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
       e.preventDefault();
-      if (window.quicklink?.openExternal) {
-        window.quicklink.openExternal(href);
-      } else {
-        window.open(href, "_blank", "noopener,noreferrer");
-      }
+      window.open(href, "_blank", "noopener,noreferrer");
     }
   }} />;
 });

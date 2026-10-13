@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Avatar, Button, Modal, Popconfirm, Switch, Radio, Select, message, Typography, theme } from "antd";
+import { Avatar, Button, Modal, Popconfirm, Switch, Radio, Select, Typography, theme } from "antd";
 import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { getSettings, saveSettings, isDesktop } from "../../services/settings";
+import { getSettings, saveSettings } from "../../services/settings";
 import type { AppSettings, ThemeMode } from "../../services/settings";
 import { useThemeStore } from "../../stores/themeStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -34,9 +34,6 @@ const rowBase: React.CSSProperties = {
 
 const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
   const [settings, setSettings] = useState<AppSettings>(getSettings());
-  const [autoLaunch, setAutoLaunch] = useState(false);
-  const [autoLaunchLoading, setAutoLaunchLoading] = useState(false);
-  const desktop = isDesktop();
   const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
   const { user, logout, fetchUser } = useAuthStore();
   const { token } = theme.useToken();
@@ -44,32 +41,12 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
   // 分隔线颜色随主题适配 (浅色 #f0f0f0 / 深色 token)
   const rowStyle: React.CSSProperties = { ...rowBase, borderBottom: `1px solid ${token.colorBorderSecondary}` };
 
-  // 打开时刷新本地设置与账号信息 (原侧栏用户信息入口合并至此); 桌面环境下读取系统开机自启状态
+  // 打开时刷新本地设置与账号信息 (原侧栏用户信息入口合并至此)
   useEffect(() => {
     if (!open) return;
     setSettings(getSettings());
     fetchUser();
-    if (window.quicklink) {
-      window.quicklink
-        .getAutoLaunch()
-        .then(setAutoLaunch)
-        .catch(() => setAutoLaunch(false));
-    }
   }, [open]);
-
-  const handleAutoLaunch = async (checked: boolean) => {
-    if (!window.quicklink) return;
-    setAutoLaunchLoading(true);
-    try {
-      await window.quicklink.setAutoLaunch(checked);
-      setAutoLaunch(checked);
-      saveSettings({ autoLaunch: checked });
-    } catch {
-      message.error("设置开机自启动失败");
-    } finally {
-      setAutoLaunchLoading(false);
-    }
-  };
 
   const handleLogout = () => {
     logout();
@@ -125,21 +102,6 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
             { label: "浅色", value: "light" },
             { label: "深色", value: "dark" },
           ]}
-        />
-      </div>
-      <div style={rowStyle}>
-        <div>
-          <Text strong>开机自启动</Text>
-          <br />
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {desktop ? "随 Windows 开机自动启动 QuickLink" : "仅桌面版支持"}
-          </Text>
-        </div>
-        <Switch
-          checked={autoLaunch}
-          disabled={!desktop}
-          loading={autoLaunchLoading}
-          onChange={handleAutoLaunch}
         />
       </div>
       <div style={rowStyle}>

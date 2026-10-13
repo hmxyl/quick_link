@@ -4,7 +4,7 @@
 >
 > | 文档 | 内容 |
 > | ---- | ---- |
-> | **BUILD.md**（本文） | 项目概述、技术选型、目录结构、存储与迁移、安全清单、前端通用架构、桌面版、构建部署、依赖、测试 |
+> | **BUILD.md**（本文） | 项目概述、技术选型、目录结构、存储与迁移、安全清单、前端通用架构、Windows 服务版、构建部署、依赖、测试 |
 > | [LINKS.md](./LINKS.md) | **链接管理**：链接/标签/关联账号凭据的数据模型、API、业务规则与前端交互 |
 > | [NOTES.md](./NOTES.md) | **笔记管理**：文件树存储、排序、附件、zip 导入导出的数据模型、API 与前端交互 |
 > | [USER.md](./USER.md) | **用户信息管理**：认证、设置与凭据记忆的模型、API 与前端交互 |
@@ -16,13 +16,13 @@
 
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
-| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗（含每行链接数配置、↑/↓ 排序，链接展示顺序与标签排序一致）、复制并用系统浏览器打开 | [LINKS.md](./LINKS.md) |
-| 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键打开于 Typora（支持自定义安装路径）、复制文件路径/打开于资源管理器、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
+| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗（含每行链接数配置、↑/↓ 排序，链接展示顺序与标签排序一致）、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
+| 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键复制文件路径（打开于 Typora / 资源管理器仅非服务模式可用，见 §9.5；Typora 支持自定义安装路径）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
 | 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理（键盘方向键导航）、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth，JSON 一键格式化，可编辑接口名称）、响应查看（状态码/耗时/Body/Headers，JSON 格式化/原始切换）、请求历史记录（点击恢复含响应结果）、集合导出/导入（原生格式 + Postman Collection v2.1 双向兼容）、环境 Postman 格式导入/导出、拷贝为 cURL、导入 cURL | [API.md](./API.md) |
-| 桌面版 | Electron 桌面版（NSIS 安装包 / Portable 单文件 / ZIP 免安装三种格式），内嵌后端，双击即用；最小化/关闭隐藏到系统托盘后台运行；太阳图标统一 | 本文 §9 |
-| 数据存储 | 零外部依赖：NeDB 嵌入式 .db 文件 + 笔记文件树，全部统一存于 `user_data/` 目录（桌面版安装时可指定位置，默认用户目录下的 `.quick_link`），便于整体备份/迁移 | 本文 §4 |
-| 通用体验 | 全中文界面（Ant Design zhCN）、外观主题（跟随系统/浅色/深色）、全局字体选择、侧栏收起记忆、记住密码/自动登录、开机自启（桌面版） | 本文 §8/§9 |
+| Windows 服务版 | NSIS 安装包把服务端注册为 **Windows 服务**（NSSM + 随包 `node.exe`），开机自动启动，通过浏览器访问 `http://localhost:3000`；仅监听 `127.0.0.1`，不对局域网开放；开始菜单附「QuickLink Service Control」运维面板 | 本文 §9 |
+| 数据存储 | 零外部依赖：NeDB 嵌入式 .db 文件 + 笔记文件树，全部统一存于同一数据目录（开发态 `user_data/`；服务版安装时可指定位置，默认 `%ProgramData%\QuickLink\data`），便于整体备份/迁移 | 本文 §4 |
+| 通用体验 | 全中文界面（Ant Design zhCN）、外观主题（跟随系统/浅色/深色）、全局字体选择、侧栏收起记忆、记住密码/自动登录、开机自启（Windows 服务） | 本文 §8/§9 |
 
 ---
 
@@ -39,8 +39,8 @@
 | 笔记/压缩   | marked + @milkdown/crepe + adm-zip | 前端 Markdown 渲染与所见即所得编辑；后端 zip 导入/导出 |
 | 加密        | bcryptjs (12 rounds)           | 登录密码哈希，纯 JS 免原生编译；账号凭据明文存储（已移除主密码加密）|
 | 认证        | JWT (jsonwebtoken)             | 默认 2h 过期                                     |
-| 桌面版      | Electron 31 + electron-builder | 进程内启动后端，Windows 打包三目标（nsis 安装包 / portable 单文件 / zip 免安装） |
-| 部署        | 直接运行 / Docker / 桌面安装包 | 单进程前后端一体，无需数据库容器                 |
+| Windows 服务 | NSSM + 随包 node.exe v22   | `server/service.js` 作服务入口；独立 NSIS 脚本（非 electron-builder）注册 SCM 服务、开机自启、浏览器访问 |
+| 部署        | 直接运行 / Docker / Windows 服务安装包 | 单进程前后端一体，无需数据库容器                 |
 
 ---
 
@@ -61,7 +61,7 @@ quick_link/
 │   │   ├── layout/             # AppLayout 侧栏+顶栏 (收起记忆, 底部仅设置/收起展开; 用户信息已并入设置弹窗)
 │   │   ├── services/           # api.ts (axios 封装) / settings.ts (本地设置与凭据记忆)
 │   │   ├── hooks/              # usePageVisibility (CachedPages 页面可见性 Context + hook)
-│   │   ├── stores/authStore.ts # Zustand 认证态; themeStore.ts # 外观主题 (跟随系统/浅/深)
+│   │   ├── stores/authStore.ts # Zustand 认证态; themeStore.ts # 外观主题 (跟随系统/浅/深); capabilityStore.ts # 服务端能力探测 (session 0 下隐藏桌面专属入口)
 │   │   ├── styles/markdown.css # Markdown 预览样式 + 深色模式覆盖
 │   │   ├── types/              # 共享类型定义
 │   │   ├── App.tsx             # 路由 (BrowserRouter, zhCN) + CachedPages 页面缓存
@@ -75,25 +75,27 @@ quick_link/
 │   │   │   ├── notes/          # noteController / attachmentController + routes.ts
 │   │   │   ├── api/            # environmentController / collectionController / historyController / proxyController + routes.ts
 │   │   │   └── user/           # authController + routes.ts
-│   │   ├── config/             # env.ts (DATA_DIR 解析) / database.ts (NeDB+索引)
+│   │   ├── config/             # env.ts (DATA_DIR / HOST / SERVICE_MODE 解析) / database.ts (NeDB+索引)
 │   │   ├── middleware/         # auth.ts (JWT) / errorHandler.ts
 │   │   ├── services/           # cryptoService (generatePassword / isLegacyCipher) / migrateService
 │   │   ├── migrations/         # 001-initial-schema / 002-notes-to-filesystem / 003-multi-account
 │   │   ├── scripts/            # migrate-up / migrate-down / migrate-status
 │   │   ├── types/index.ts
-│   │   └── app.ts              # Express 入口 (启动时自动迁移; STATIC_DIR 静态托管)
+│   │   └── app.ts              # Express 入口 (启动时自动迁移; STATIC_DIR 静态托管; HOST 绑定; SIGINT/SIGTERM/SIGBREAK 优雅退出)
+│   ├── service.js              # Windows 服务入口: 解析 %ProgramData%\QuickLink 配置 → 注入环境变量 → 加载 dist/app.js
 │   └── scripts/test-notes-api.js  # 笔记模块 API 冒烟测试 (19 项断言)
 ├── user_data/                  # 全部用户数据 (运行时生成, gitignore)
 │   ├── note/<userId>/          # 笔记文件树 (文件夹=目录, 文档=.md, 回收站=.trash)
 │   ├── attachment/             # 笔记附件文件体 (uuid 文件名)
 │   └── *.db                    # users/links/tags/attachments/note_orders/migrations/api_environments/api_collections/api_history
-├── desktop/                    # Electron 桌面壳
-│   ├── main.js                 # 主进程: 内嵌 Express + 托盘 + 自启 IPC + 数据目录解析/恢复/迁移
-│   ├── preload.js              # contextBridge 暴露开机自启 + 系统浏览器打开 API
-│   ├── scripts/gen-icon.js     # icon.svg → icon.ico/icon.png (16/32/48/256)
-│   ├── build/                  # 生成产物 (icon.ico/icon.png, gitignore) + uninstall-backup.nsh (NSIS 钩子: 数据目录选择页/指针与迁移提示/卸载前备份)
-│   └── package.json            # electron-builder 配置 (nsis/portable/zip 三目标)
-├── build-desktop.ps1           # Windows 一键打包脚本
+├── installer/                  # Windows 服务版安装包 (独立 NSIS 脚本, 不依赖 electron-builder)
+│   ├── quicklink.nsi           # 安装脚本 (UTF-8 带 BOM): 数据目录选择页 / 指针写入 / 密钥交接 / NSSM 注册服务 / 健康校验 / 快捷方式 / 卸载
+│   ├── assets/                 # icon.ico + icon.png (gen-icon.js 产物, 已入库) + quicklink-ctl.cmd (服务控制面板)
+│   ├── scripts/                # gen-icon.js (icon.svg → ico/png 16/32/48/256) / migrate-legacy.js (交接旧版 JWT 密钥) / check-health.js (安装后 HTTP 探测)
+│   ├── vendor/nssm.exe         # 服务包装器 (SHA256 锁定, 已入库)
+│   ├── package.json            # png-to-ico (图标生成)
+│   └── stage/ .cache/ release/ # 构建中间产物与安装包输出 (gitignore)
+├── build-installer.ps1         # Windows 一键打包脚本 (校验/下载 vendor 二进制 → 组装 stage → makensis)
 ├── Dockerfile.server           # 后端镜像 (node:20-alpine)
 ├── Dockerfile.client           # 前端镜像 (Vite 构建 + nginx 托管)
 ├── nginx.conf                  # SPA 回退 + /api 反向代理到 server
@@ -106,13 +108,13 @@ quick_link/
 
 ## 4. 数据存储与模型
 
-> 全部用户数据统一存放于 `user_data/`（开发态在项目根；桌面版安装时可指定目录，默认用户目录下的 `.quick_link`；Docker 经 volume 挂载）。
-> NeDB 集合以独立 `.db` 文件（JSON Lines）直接置于 `user_data/` 根下；**笔记不入库**，以真实文件目录树存储（详见 [NOTES.md](./NOTES.md)）。
+> 全部用户数据统一存放于同一数据目录（开发态为项目根 `user_data/`；服务版安装时可指定，默认 `%ProgramData%\QuickLink\data`；Docker 经 volume 挂载）。
+> NeDB 集合以独立 `.db` 文件（JSON Lines）直接置于数据目录根下；**笔记不入库**，以真实文件目录树存储（详见 [NOTES.md](./NOTES.md)）。
 
 ### 4.1 存储布局
 
 ```
-user_data/
+<数据目录>/               # 开发态 user_data/; 服务版默认 %ProgramData%\QuickLink\data
 ├── note/<userId>/      # 文件夹=目录, 文档=.md (UTF-8), 回收站=根下隐藏目录 .trash/
 ├── attachment/         # 附件文件体 (uuid + 原扩展名)
 ├── users.db  links.db  accounts.db  tags.db  attachments.db  note_orders.db  custom_icons.db  api_environments.db  api_collections.db  api_history.db  migrations.db
@@ -189,7 +191,7 @@ npm run migrate:status    # 查看状态
 | /api/links、/api/tags、/api/accounts（兼容保留）、/api/custom-icons | 链接管理 | [LINKS.md §3](./LINKS.md) |
 | /api/notes（含 /attachments） | 笔记管理 | [NOTES.md §3](./NOTES.md) |
 | /api/api-manager | 接口管理（环境/集合/历史/代理发送） | [API.md §3](./API.md) |
-| /api/health | 通用健康检查 | — |
+| /api/health | 通用健康检查 + 服务端能力上报（`capabilities.launchNativeGui`，见 §9.5） | — |
 
 ---
 
@@ -200,6 +202,7 @@ npm run migrate:status    # 查看状态
 - [x] 接口限流（200 req / 15min）；Helmet；CORS 配置
 - [x] 密码强度校验（登录密码至少 8 位）
 - [x] 笔记路径越权校验（禁止逃逸用户根目录）
+- [x] Windows 服务版仅监听 `127.0.0.1`，不对局域网开放（无 HTTPS + 凭据明文存储，暴露到网络风险过高，见 §9.4）
 - [ ] HTTPS（生产环境需自行配置）
 
 ---
@@ -245,51 +248,136 @@ Zustand `themeStore`：`mode (system|light|dark) / isDark / setMode`；持久化
 
 ---
 
-## 9. Windows 桌面版（Electron）
+## 9. Windows 服务版
+
+> 2026-10 起移除 Electron 桌面壳：安装包把服务端注册为 **Windows 服务**并开机自动启动，日常通过浏览器访问 `http://localhost:3000`。安装包体积从约 79MB 降到约 24MB。
 
 ### 9.1 运行时结构
 
 ```
-Electron 主进程 (desktop/main.js)
-├── 启动日志 %APPDATA%\QuickLink\startup.log (console 输出落盘, 尽早建立以覆盖数据目录解析/恢复/迁移日志)
-├── 生成/持久化 JWT_SECRET (%APPDATA%\QuickLink\secrets.json, 跨安装稳定)
-├── 系统托盘 (太阳图标; 最小化/关闭→隐藏后台运行; 单击恢复; 菜单: 显示主窗口/退出)
-├── 探测空闲端口 (默认 3000 起递增)
-├── 进程内 require 启动 Express (resources/server/dist/app.js)
-│     ├── STATIC_DIR → resources/public (Vite 产物, SPA 回退)
-│     └── DATA_DIR   → 用户数据目录 (见下: 安装向导可选择)
-│           重装更换目录: 按 %APPDATA%\QuickLink\pending_migration.txt 把旧目录数据复制到新目录 (先于恢复链)
-│           首次启动自动恢复 (数据目录为空时, 按优先级): 卸载备份 %APPDATA%\QuickLink\user_data
-│             > 旧版 %APPDATA%\data > 早期包名目录 quicklink-desktop\data > 安装目录残留 user_data
-└── BrowserWindow 加载 http://127.0.0.1:<port>/
+Windows SCM (服务控制管理器)
+└── nssm.exe —— 服务名 QuickLink / LocalSystem / SERVICE_AUTO_START
+    └── node.exe "<安装目录>\server\service.js"
+        ├── 读取机器级配置 %ProgramData%\QuickLink\
+        ├── 注入环境变量后 require dist/app.js
+        │     DATA_DIR=<用户数据目录>   STATIC_DIR=<安装目录>\public
+        │     NODE_ENV=production       HOST=127.0.0.1  PORT=3000
+        │     JWT_SECRET=<持久化密钥>   QUICKLINK_SERVICE_MODE=1
+        └── Express 监听 127.0.0.1:3000 (静态 SPA + REST API)
+浏览器 → http://localhost:3000
 ```
 
-安装时可指定用户数据目录：NSIS 安装向导在安装目录页之后新增「选择用户数据目录」页（`customPageAfterChangeDir` 钩子），默认值为**用户目录下的 `.quick_link`**（重装时回读上次选择预填），可输入或「浏览…」选择任意绝对路径；选择结果由 `customInstall` 写入 `%APPDATA%\QuickLink\data_dir.txt`，main.js 的 `resolveDataDir()` 启动时读取该指针（`decodeDirText()` 统一解析 UTF-16LE / 早期误写 "FF FE + 单字节 ANSI" / 纯 UTF-8；路径无效/目录不可用时回退默认目录并记日志）。静默安装（/S）不出现该页也不改写指针，重装/升级沿用上次选择。重装更换目录：`customInstall` 把旧目录写入 `%APPDATA%\QuickLink\pending_migration.txt`，main.js 首次启动时（恢复链之前）若新目录为空且旧目录有数据则整体复制到新目录（仅复制不删除旧目录），完成后消费提示文件；复制失败保留提示文件，下次启动重试。
+为什么状态放在 `%ProgramData%\QuickLink` 而不是 `%APPDATA%\QuickLink`：服务以 **LocalSystem** 账户运行，其 `%APPDATA%` 解析到 `C:\Windows\System32\config\systemprofile\AppData\Roaming`，与登录用户无关；且服务在任何用户登录之前就已启动。`%ProgramData%\QuickLink` 内容：
 
-卸载不丢数据：NSIS 自定义钩子 `desktop/build/uninstall-backup.nsh`（`customUnInit`，在删除安装文件前执行）将 `user_data` 整目录备份到 `%APPDATA%\QuickLink\user_data`；重装后首次启动由 main.js 自动拷回。用户数据目录在安装目录之外（自定义位置）时，安装目录下无 user_data，卸载自动跳过备份且外部数据不随卸载删除；指针文件 `data_dir.txt` 也不随卸载清理，重装后沿用上次选择。`secrets.json` 本就存于 `%APPDATA%\QuickLink`，卸载不清理，密钥跨安装稳定。覆盖安装/升级会先静默运行旧卸载器（此时触发上述备份），重装后首次启动自动恢复，数据不丢。注意：`desktop/package.json` 顶层必须保留 `productName`，否则 Electron 以包名定位 `userData`（`%APPDATA%\quicklink-desktop`）导致备份/恢复路径错位；main.js 内置旧包名目录的 secrets/data 迁移兼容。`uninstall-backup.nsh` 含中文字符串，必须保持 UTF-8 带 BOM 编码（makensis 无 BOM 时按 ANSI 读取会乱码）；自定义 include 被置于生成脚本最前（早于 MUI2.nsh），页面函数（含 `!insertmacro MUI_HEADER_TEXT`）必须定义在 `customPageAfterChangeDir` 宏内部、随宏在 MUI2 加载后展开，且数据目录变量仅在安装器构建中声明（`!ifndef BUILD_UNINSTALLER`，否则卸载器构建触发 NSIS warning 6001 导致打包失败）。另注意 Unicode 安装器中 `FileWrite` 实际输出单字节 ANSI（手写 `FF FE` 前缀得到的是 "BOM + ANSI" 坏格式，实测确认），写指针/迁移提示必须用 `FileWriteUTF16LE`（输出无 BOM 的 UTF-16LE，中文路径正确）；页面预填读取优先 `FileReadUTF16LE`，旧坏格式按字节重建回退（`FileRead` 按 ANSI 代码页解码会产生乱码，不可用）。
+| 文件 | 写入方 / 编码 | 作用 |
+| ---- | ------------- | ---- |
+| `data_dir.txt` | 安装器 / UTF-16LE | 用户数据目录（安装向导选择的绝对路径） |
+| `pending_migration.txt` | 安装器 / UTF-16LE | 换目录时待迁移的旧目录；服务首次启动消费后删除 |
+| `jwt_secret.txt` | 安装器 / UTF-8 | 交接旧版 `%APPDATA%\QuickLink\secrets.json` 里的密钥；消费后删除 |
+| `config.json` | service.js / UTF-8 | `host` / `port` / `jwtSecret`，服务重启后沿用 |
+| `logs\service.out.log` / `logs\service.err.log` | NSSM 重定向 | stdout / stderr，单文件超 10MB 在线轮转 |
+| `data\` | 服务端 | 默认数据目录（安装时未另选位置） |
 
-### 9.2 打包
+编码分工是硬约束：Unicode 安装器中 `FileWrite` 输出 ANSI 单字节，中文路径会损坏，因此安装器一律用 `FileWriteUTF16LE` 写 `.txt` 指针文件、**从不写 JSON**；`config.json` 由 `service.js` 独占读写（UTF-8）。`service.js` 的 `decodeText()` 兼容 UTF-16LE、早期误写的 "FF FE + 单字节 ANSI" 与纯 UTF-8 三种形态。
+
+### 9.2 安装目录布局
+
+```
+C:\Program Files\QuickLink\
+├── node\node.exe            # 随包分发的 Node 运行时 (v22.14.0, 仅 exe; 服务端无原生插件)
+├── nssm\nssm.exe            # 服务包装器 (2.24-101-g897c7ad win64)
+├── server\
+│   ├── dist\                # tsc 产物
+│   ├── node_modules\        # --omit=dev 生产依赖
+│   ├── service.js           # 服务入口: 解析配置 → 注入环境变量 → 加载 dist/app.js
+│   ├── migrate-legacy.js    # 安装期一次性交接旧版 JWT 密钥
+│   └── check-health.js      # 安装后 HTTP 探测 (比 sc query 更可靠)
+├── public\                  # Vite 产物, 由 Express 经 STATIC_DIR 托管
+├── quicklink-ctl.cmd        # 服务控制面板 (启动/停止/重启/状态/日志/数据目录)
+├── icon.ico
+└── Uninstall QuickLink.exe
+```
+
+### 9.3 数据目录解析与迁移
+
+安装向导在「安装目录」页之后有「选择用户数据目录」页，预填值按**越新越优先**解析（目的：升级安装一定能找到既有数据，而不是安静地建一个空目录让人以为数据丢了）：
+
+1. `%ProgramData%\QuickLink\data_dir.txt`（服务版上次的选择）
+2. `%APPDATA%\QuickLink\data_dir.txt`（旧版 Electron 桌面版的选择）
+3. `%USERPROFILE%\.quick_link`（旧版默认目录，非空才沿用）
+4. `<安装目录>\user_data`（更早期布局；非空时把目标改定为 `%ProgramData%\QuickLink\data`，并把旧目录记为迁移源，由服务首次启动**复制出来**——数据不应留在安装目录内，卸载会连带删除）
+5. 全新安装：`%ProgramData%\QuickLink\data`（不能用 `%USERPROFILE%`，LocalSystem 读不到登录用户的 profile）
+
+校验：非空、必须是盘符开头的绝对路径（相对路径对 LocalSystem 无从解析）、去掉结尾反斜杠（根目录 `D:\` 保留）。选择结果以 UTF-16LE 写入 `data_dir.txt`；迁移源与最终目录不同时另写 `pending_migration.txt`。
+
+服务首次启动时 `consumePendingMigration()`：仅在新目录为空且旧目录有数据时整体复制（**只复制不删除旧目录**），随后删除提示文件；复制失败保留提示文件下次重试；目标非空视为已有数据，直接丢弃提示以免覆盖。
+
+密钥交接：`migrate-legacy.js` 由安装器以**安装者身份**运行（服务是 LocalSystem，看不到用户的 `%APPDATA%`），从 `%APPDATA%\QuickLink\secrets.json`（或早期 `%APPDATA%\quicklink-desktop\secrets.json`）取出 `JWT_SECRET` 写成 `%ProgramData%\QuickLink\jwt_secret.txt`；`service.js` 首次启动采纳后写入 `config.json` 并删除该文件，之后一律以 `config.json` 为准。脚本幂等，失败不阻断安装（最坏结果只是升级后需重新登录一次）。密钥必须持久化：每次启动随机会让已签发的 token 全部失效，用户每次开机都要重新登录。
+
+卸载不丢数据：卸载只删除安装目录、快捷方式与注册表卸载项，**有意保留 `%ProgramData%\QuickLink`**（默认数据目录就在其中，且保留 `config.json` 可让重装沿用同一 JWT 密钥）；用户自选的数据目录同样保留。极早期把数据放在安装目录内的布局，卸载前会用 `xcopy` 兜底备份到 `%APPDATA%\QuickLink\user_data`。
+
+### 9.4 服务配置与运维
+
+NSSM 注册参数（`InstallService`）：
+
+| 项 | 值 | 说明 |
+| -- | -- | ---- |
+| `Start` | `SERVICE_AUTO_START` | 开机自动启动，早于任何用户登录 |
+| `ObjectName` | `LocalSystem` | |
+| `AppDirectory` | `<安装目录>\server` | |
+| `AppStdout` / `AppStderr` | `%ProgramData%\QuickLink\logs\service.{out,err}.log` | |
+| `AppRotateFiles` / `AppRotateOnline` / `AppRotateBytes` | `1` / `1` / `10485760` | 在线轮转，单文件 10MB 上限 |
+| `AppExit Default` | `Restart` | 异常退出后重启 |
+| `AppRestartDelay` | `5000` | 5 秒后重启 |
+| `AppThrottle` | `10000` | 10 秒内退出视为启动失败，避免"启动即崩溃"无限快速重启 |
+
+监听地址固定 `127.0.0.1`：服务版**不对局域网开放**（无 HTTPS，账号凭据明文存储，只有 `express-rate-limit` 保护登录接口）。`env.HOST` 仅在显式设置时生效，Docker 部署仍保持监听全部网卡的原有语义。
+
+优雅退出：NSSM 停止服务 / 系统关机时发送 CTRL_BREAK（Node 映射为 `SIGBREAK`），`app.ts` 捕获 `SIGINT`/`SIGTERM`/`SIGBREAK` 后先 `server.close()` 再退出（5 秒兜底强退），避免直接终止进程丢掉 NeDB 尚未落盘的写入。
+
+安装后校验用 `check-health.js` 走 HTTP 而不是解析 `sc query`：服务可能显示 RUNNING 而 Express 已经崩在 `listen` 上（端口 3000 被占用就是如此），NSSM 会按 `AppExit` 策略不停重启，界面上看着"正常"实则完全不可用。探测失败弹窗提示端口占用并指向 `service.err.log`。
+
+日常运维：开始菜单「QuickLink Service Control」（`quicklink-ctl.cmd`，需管理员）提供 启动 / 停止 / 重启 / 详细状态（`sc qc` + `sc query`）/ 打开浏览器 / 打开日志目录 / 跟踪错误日志（`Get-Content -Tail 40 -Wait`）/ 显示数据目录。
+
+快捷方式：开始菜单与桌面各放一个 `QuickLink.url`（`[InternetShortcut]`，双击用默认浏览器打开 `http://localhost:3000`，图标取 `icon.ico`）；安装完成页的「立即在浏览器中打开 QuickLink」勾选框走 `ExecShell open`。
+
+### 9.5 session 0 限制（已知功能降级）
+
+Windows 服务运行在 **session 0**，与用户桌面隔离：服务端 `spawn` 出来的 `explorer.exe` / `Typora.exe` 窗口无法出现在用户桌面上。相关 API（`POST /api/notes/:id/open-folder`、`/open-in-typora`、`/api/notes/attachments/:id/open-folder`、`/open-file`）仍然保留，但服务模式下调用无效果。
+
+处理方式：`GET /api/health` 返回 `capabilities.launchNativeGui`（值为 `!env.SERVICE_MODE`），前端 `capabilityStore` 启动时探测一次并据此隐藏入口——笔记右键菜单的「打开于 Typora」「打开于资源管理器」、附件管理的「打开所在文件夹」按钮。「复制文件路径」保留（服务模式下依然有效，是用户的替代手段）。开发态 `npm run dev` 的服务端在用户会话内，该能力为 `true`，入口照常显示。
+
+`file://` 链接同样降级：浏览器安全策略禁止从 `http://` 页面打开 `file://` URL，原先依赖的 Electron `shell.openExternal` 已随桌面版移除。链接管理点击 `file://` 链接改为把真实本地路径复制到剪贴板并提示（`file:///C:/x` → `C:/x`，`file:////server/share` → `//server/share`，资源管理器地址栏可识别），用户粘贴即可。
+
+### 9.6 打包
 
 ```powershell
 # 项目根目录一键执行
-powershell -ExecutionPolicy Bypass -File build-desktop.ps1
-# 产物 (desktop/release/):
-#   QuickLink-Setup-<version>.exe   (NSIS 安装包, 约 79MB)
-#   QuickLink <version>.exe         (Portable 单文件免安装, 约 79MB)
-#   QuickLink-<version>-win.zip     (免安装压缩包, 约 107MB, 解压即 win-unpacked 内容)
+powershell -ExecutionPolicy Bypass -File build-installer.ps1 -Version 2.0.0
+# -SkipBuild 跳过 tsc / vite / 生产依赖安装, 仅重新组装载荷并编译 NSIS
+# 产物 (installer/release/):
+#   QuickLink-Setup-<version>.exe   (约 24MB)
 ```
 
-流程：gen-icon 生成图标 → server `tsc` → client `vite build` → `--omit=dev` 安装生产依赖到 `server/prod_modules` → electron-builder 打包（nsis/portable/zip 三目标；electron/NSIS 二进制走 npmmirror 镜像）。
+流程：`gen-icon.js` 生成图标 → server `tsc` → client `vite build` → `--omit=dev` 安装生产依赖到 `server/prod_modules`（robocopy `/MOVE`，比 `Move-Item` 更能容忍瞬时文件锁）→ 解析 vendor 二进制 → 组装 `installer/stage/`（`node/` `nssm/` `server/` `public/`）→ `makensis /INPUTCHARSET UTF8` 编译 → 删除 stage。`makensis.exe` 查找顺序：`installer/.cache/nsis/` → PATH → `%LOCALAPPDATA%\electron-builder\Cache\nsis\`。
 
-### 9.3 要点
+供应链：三个二进制全部 SHA256 锁定，校验失败即删除文件并退出（下次重新下载）。哈希均经**两个独立镜像交叉验证**——NSSM 取自 Chocolatey 包，其内嵌 zip 的校验值与包内 `legal/VERIFICATION.txt` 公布的官方值一致，`win64/nssm.exe` 又与 npm `nssm-bin@2.24.102` 一致；Node 取自 npmmirror 的官方发行 zip。
 
-- 服务端依赖全为纯 JS（bcryptjs/NeDB），免原生重建，目标机无需 Node 环境。
-- 单实例锁：重复启动聚焦已有窗口；外链经系统浏览器打开。
-- 后台运行：最小化与关闭均隐藏到托盘；托盘菜单「退出 QuickLink」/系统关机（`before-quit` 置位）才真实销毁窗口。
-- 图标统一：矢量源 `client/public/icon.svg`；`gen-icon.js` 光栅化 16/32/48/256 并经 png-to-ico 生成 `build/icon.ico`（NSIS 仅接受 BMP 格式 ICO 条目）；electron-builder 用于 exe/安装包/快捷方式，另经 extraResources 分发 `resources/icon.ico` 供运行时托盘加载（app.asar 不含 build/ 目录）。
-- 开机自启与外链打开：preload.js（contextBridge）暴露 `window.quicklink.getAutoLaunch/setAutoLaunch`（主进程 `app.setLoginItemSettings`）与 `openExternal`（主进程 `shell.openExternal`，供前端「复制并用系统浏览器打开」使用）。
-- 分发格式：未签名 exe 可能被 Windows 应用程序控制策略/SmartScreen 拦截，故同时提供 Portable 单文件与 ZIP 免安装格式（不经过安装器，双击/解压即用，见 §13.3）；安装向导能力（数据目录选择/卸载备份）仅 NSIS 格式具备。
+| 二进制 | 版本 | SHA256 |
+| ------ | ---- | ------ |
+| `installer/vendor/nssm.exe`（已入库） | 2.24-101-g897c7ad win64 | `eee9c44c…16d848` |
+| `node-v22.14.0-win-x64.zip`（构建期下载） | v22.14.0 | `55b63929…95f217` |
+| `node.exe`（从上述 zip 提取） | v22.14.0 | `33b1bc1a…6771b` |
+
+NSIS 脚本注意事项：源文件必须 **UTF-8 带 BOM**（无 BOM 时 makensis 按系统 ANSI 代码页读取，中文乱码）；NSIS **没有 `$PROGRAMDATA` 常量**，机器级目录须在 `InitPaths` 中运行时解析（`ReadEnvStr` → 注册表 `ProfileList\ProgramData` + `ExpandEnvStrings` → `$WINDIR\..\ProgramData`）；卸载段只能调用 `un.` 前缀函数，安装/卸载共用的实现体须放进 `!macro` 各展开一份；MUI2 完成页的勾选框只在定义了 `MUI_FINISHPAGE_RUN` 时才创建，单独定义 `MUI_FINISHPAGE_RUN_FUNCTION` 不生效（且会触发 warning 6010）。
+
+其他要点：
+
+- 服务端依赖全为纯 JS（bcryptjs / NeDB），零 `.node` 原生插件，因此随包只需一个 `node.exe`，目标机无需 Node 环境。
+- 安装顺序为 停服务 → 复制文件 → 交接密钥 / 写指针 → 注册并启动服务 → 健康校验 → 建快捷方式。停服务必须在复制之前：运行中的 `node.exe` 会锁住自身与 `.db` 文件。
+- `RequestExecutionLevel admin`：注册 Windows 服务无法在 per-user 安装下完成。
 - helmet 关闭 CSP 以支持 Vite 产物内联资源。
+- 安装包未签名，可能被 SmartScreen / 应用程序控制策略拦截（见 §13.3）。
 
 ---
 
@@ -320,9 +408,9 @@ services:
 
 nginx.conf：`/api` 反代到 `server:3000`，其余 SPA 回退。数据经命名卷 `app_data` 持久化。
 
-### 10.3 桌面安装包
+### 10.3 Windows 服务安装包
 
-见 §9.2。
+见 §9.6。安装完成后服务已注册为开机自动启动，浏览器访问 `http://localhost:3000`（开始菜单 / 桌面均有 `QuickLink.url` 快捷方式）。
 
 ---
 
@@ -355,9 +443,9 @@ devDependencies：typescript / ts-node / ts-node-dev / jest / ts-jest / 各 @typ
 
 devDependencies：vite / @vitejs/plugin-react / typescript / vitest / @testing-library/react。
 
-### desktop
+### installer
 
-electron ^31 / electron-builder ^24 / png-to-ico（devDependencies）。服务端运行时依赖由打包脚本以 `--omit=dev` 安装至 `server/prod_modules` 随包分发。
+`png-to-ico`（devDependencies，图标生成）。二进制依赖：`installer/vendor/nssm.exe` 已入库；Node v22.14.0 win-x64 由构建脚本下载并缓存于 `installer/.cache/`（仅取 `node.exe`）——两者均 SHA256 锁定，见 §9.6。服务端运行时依赖由打包脚本以 `--omit=dev` 安装至 `server/prod_modules` 随包分发。
 
 ---
 
@@ -365,19 +453,31 @@ electron ^31 / electron-builder ^24 / png-to-ico（devDependencies）。服务�
 
 - **API 冒烟**：`node server/scripts/test-notes-api.js`（需后端运行于 :3000）：覆盖登录、文件夹/文档创建、内容更新、附件上传、重命名及附件 noteId 重映射、列表/下载、zip 导出/导入、软删除→回收站→还原、彻底删除、清空等 19 项断言。
 - **单元框架**：server 配 jest/ts-jest，client 配 vitest/@testing-library/react（`npm test`）。
-- **桌面验证**：打包后启动 win-unpacked 冒烟（health 接口、user_data 自动创建、托盘后台运行、托盘太阳图标）；数据目录指针解析/恢复/迁移按启动日志 `%APPDATA%\QuickLink\startup.log` 核对。
+- **服务版验证**：安装后核对 `sc qc QuickLink` 为 `AUTO_START` 且 `sc query` 为 `RUNNING`；`GET /api/health` 返回 `capabilities.launchNativeGui=false`；`netstat -ano -p tcp` 只应看到 `127.0.0.1:3000` 监听，用局域网 IP 访问应被拒绝；浏览器完成注册/登录/链接与笔记读写；笔记右键菜单不出现「打开于 Typora」「打开于资源管理器」，附件管理不出现「打开所在文件夹」，设置弹窗无「开机自启动」。数据目录指针解析与迁移结果按 `%ProgramData%\QuickLink\logs\service.out.log` 核对。
+- **免安装冒烟**：不装服务也能验证服务端本体——把 `server/dist` + `server/prod_modules`（改名 `node_modules`）+ `service.js` + `client/dist`（改名 `public`）按 §9.2 布局拼到一个目录，设 `QUICKLINK_CONFIG_DIR` 指向临时目录后用任意 `node.exe` 跑 `server/service.js` 即可。
 
 ---
 
-## 13. 设计决策记录（通用/桌面）
+## 13. 设计决策记录（通用/服务版）
 
 > 模块相关设计决策已随文档拆分移入各模块文档：链接管理 [LINKS.md §6](./LINKS.md)、笔记管理 [NOTES.md §5](./NOTES.md)、用户信息管理 [USER.md §6](./USER.md)、接口管理 [API.md §6](./API.md)。
 
-### 13.1 桌面版选型与数据目录演进
-Electron 进程内 `require()` 启动编译后 Express（依赖纯 JS 免重建，共享环境变量注入）。数据目录演进：早期 `%APPDATA%` → 安装路径下 `user_data/`（指针默认值） → 现为**安装时可指定、默认用户目录下 `.quick_link`**（指针文件 `%APPDATA%\QuickLink\data_dir.txt` 记录选择，重装/升级沿用）。数据目录为空时按优先级自动恢复：卸载备份 `%APPDATA%\QuickLink\user_data` > 旧版 `%APPDATA%\data` > 早期包名目录 `quicklink-desktop\data` > 安装目录残留 `user_data`；重装更换目录时按 `pending_migration.txt` 提示把旧目录数据复制到新目录（仅复制不删除）。`secrets.json` 存 `%APPDATA%\QuickLink` 保证密钥跨安装稳定。卸载前经 `customUnInit` 钩子把安装目录内 `user_data` 备份至 `%APPDATA%\QuickLink`（曾因卸载默认清理 `$INSTDIR` 导致重装丢数据，2026-08 修复）。
+### 13.1 服务化选型与数据目录演进
 
-### 13.2 托盘后台运行与图标分发
-最小化/关闭均隐藏到托盘（服务持续运行），托盘菜单提供恢复/退出；托盘图标经 extraResources 分发 `resources/icon.ico`（app.asar 不含 build/ 目录），与快捷方式共用同一太阳图标。
+2026-10 从 Electron 桌面壳改为 Windows 服务：不再随包分发约 200MB 的 Chromium，安装包从约 79MB 降到约 24MB；服务开机即起，无需登录、无需手动启动，也不再依赖托盘常驻。代价是失去桌面能力（见 §13.2）。
 
-### 13.3 分发格式与安全策略绕行（2026-08）
-NSIS 安装包未签名，在部分机器上被 Windows 应用程序控制策略拦截（启动即拒绝，无法放行），故在 electron-builder 的 win 目标中追加 `portable` 与 `zip`（`npx electron-builder --win` 一次产出三种格式）：Portable 单文件双击即用不经过安装器，ZIP 解压后与 `win-unpacked` 内容一致。免安装格式不带安装向导，数据目录指针 `%APPDATA%\QuickLink\data_dir.txt` 不存在时回退默认目录 `%USERPROFILE%\.quick_link`（其余恢复/迁移链路与 NSIS 安装版一致）。长期方案为购买代码签名证书并配置 `win.sign`。
+服务包装器选 NSSM，而非 `node-windows` 或自写 SCM 胶水：NSSM 是单个约 360KB 的 exe，无运行时依赖，支持日志重定向 + 在线轮转、异常重启与启动节流，且全部配置都能用命令行完成（安装器无需交互界面）。二进制入库到 `installer/vendor/` 并 SHA256 锁定，避免构建期依赖外网可达性——当时官方 `nssm.cc` 返回 HTTP 503、`www.nssm.cc` 证书吊销检查离线失败，最终从 Chocolatey 取包并与 npm `nssm-bin` 交叉校验（§9.6）。
+
+数据目录演进：早期 `%APPDATA%` → 安装路径下 `user_data/` → Electron 期「安装时可指定，默认 `%USERPROFILE%\.quick_link`」（指针 `%APPDATA%\QuickLink\data_dir.txt`）→ 现为**安装时可指定，默认 `%ProgramData%\QuickLink\data`**（指针 `%ProgramData%\QuickLink\data_dir.txt`）。迁到 ProgramData 的原因见 §9.1。升级安装按 §9.3 的五级顺序解析预填值，历史上任一布局的数据都能被找到；旧版 `%APPDATA%\QuickLink\secrets.json` 里的 JWT 密钥经 `migrate-legacy.js` 交接到 `config.json`，密钥跨安装稳定。卸载保留 `%ProgramData%\QuickLink` 与用户自选数据目录，重装沿用同一密钥与目录。（曾因卸载默认清理 `$INSTDIR` 导致重装丢数据，2026-08 修复；服务版从设计上就把数据放在安装目录之外。）
+
+### 13.2 session 0 隔离与浏览器访问的取舍
+
+Windows 服务运行在 session 0，与用户桌面隔离，服务端 `spawn` 的 GUI 进程（`explorer.exe` / `Typora.exe`）不会出现在用户桌面上。另一种做法是再装一个跑在用户会话里的 helper 进程（登录时启动 + 命名管道通信），但那会重新引入"必须登录才可用"，外加一套 IPC 与生命周期管理，与"开机即起、后台常驻"的初衷冲突。故选择**接受降级 + 前端隐藏入口**：`/api/health` 上报 `capabilities.launchNativeGui`，前端 `capabilityStore` 据此隐藏相关菜单项与按钮，保留「复制文件路径」作为替代。API 本身不删——开发态（`npm run dev`，服务端在用户会话内）该能力为 `true`，入口照常显示。
+
+访问方式改为浏览器，开始菜单/桌面放 `.url` 快捷方式。随之而来的两个具体降级——`file://` 链接无法从 `http://` 页面打开（改为复制本地路径到剪贴板）、失去系统托盘的"最小化到后台"（服务本就常驻后台，关掉浏览器标签即可）——记录在 §9.5。
+
+监听范围固定 `127.0.0.1`：项目无 HTTPS，账号凭据明文存储，登录接口只有 `express-rate-limit` 保护，因此不对局域网开放。`env.HOST` 只在显式设置时生效，Docker 部署（nginx 反代到 `server:3000`）保持监听全部网卡的原有语义不受影响。
+
+### 13.3 安装包签名与安全策略（2026-08 记录，2026-10 更新）
+
+NSIS 安装包未签名，在部分机器上会被 Windows 应用程序控制策略 / SmartScreen 拦截（启动即拒绝，无法放行）。Electron 期曾以 `portable` 与 `zip` 免安装格式绕行；服务版**无法沿用该绕行**——注册 SCM 服务本身就需要管理员权限与安装器，不存在"解压即用"的等价形态。当前缓解手段是安装包仅约 24MB、内含二进制全部 SHA256 锁定（§9.6）；被拦截时需由管理员放行，长期方案仍是购买代码签名证书。

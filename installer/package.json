@@ -1,0 +1,12 @@
+{
+  "name": "quicklink-installer",
+  "version": "1.0.0",
+  "description": "QuickLink Windows 服务版安装包构建 (NSIS)",
+  "private": true,
+  "scripts": {
+    "icon": "node scripts/gen-icon.js"
+  },
+  "devDependencies": {
+    "png-to-ico": "^3.0.2"
+  }
+}

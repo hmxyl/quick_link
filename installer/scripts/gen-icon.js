@@ -153,11 +153,12 @@ async function main() {
   const ico = await pngToIco(pngBuffers);
 
   // ---- 输出 ----
-  const buildDir = path.join(__dirname, "..", "build");
+  // 目录名为 assets 而非 build: 仓库 .gitignore 有全局 build/ 规则, 会把生成物连同源文件一起忽略
+  const buildDir = path.join(__dirname, "..", "assets");
   fs.mkdirSync(buildDir, { recursive: true });
   fs.writeFileSync(path.join(buildDir, "icon.ico"), ico);
   fs.writeFileSync(path.join(buildDir, "icon.png"), png);
-  console.log("OK: build/icon.ico (" + ico.length + " bytes, " + SIZES.length + " sizes) + build/icon.png");
+  console.log("OK: assets/icon.ico (" + ico.length + " bytes, " + SIZES.length + " sizes) + assets/icon.png");
 }
 
 main().catch((err) => {

@@ -4,8 +4,6 @@
 export type ThemeMode = "system" | "light" | "dark";
 
 export interface AppSettings {
-  /** 开机自启动 (仅桌面版生效, 由 Electron 主进程落地) */
-  autoLaunch: boolean;
   /** 记住密码: 本地保存凭据并在登录页回填 */
   rememberPassword: boolean;
   /** 自动登录: 启动时若存在已保存凭据则静默登录 */
@@ -25,7 +23,6 @@ const SETTINGS_KEY = "quicklink:settings";
 const CRED_KEY = "quicklink:savedCredentials";
 
 const DEFAULT_SETTINGS: AppSettings = {
-  autoLaunch: false,
   rememberPassword: false,
   autoLogin: false,
   themeMode: "system",
@@ -78,19 +75,3 @@ export function saveCredentials(username: string, password: string): void {
 export function clearCredentials(): void {
   localStorage.removeItem(CRED_KEY);
 }
-
-// ---- Electron 桌面桥接 (preload 注入, Web 环境不存在) ----
-
-export interface QuickLinkBridge {
-  getAutoLaunch: () => Promise<boolean>;
-  setAutoLaunch: (enabled: boolean) => Promise<void>;
-  openExternal: (url: string) => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    quicklink?: QuickLinkBridge;
-  }
-}
-
-export const isDesktop = (): boolean => typeof window !== "undefined" && !!window.quicklink;

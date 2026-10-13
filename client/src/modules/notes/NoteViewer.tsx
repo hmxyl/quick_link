@@ -126,14 +126,9 @@ function extractOutline(markdown: string): OutlineItem[] {
   return items;
 }
 
-// 用系统默认浏览器打开链接 (桌面版走 Electron shell.openExternal, 网页版走 window.open)
 const openLinkInBrowser = (href: string) => {
   if (!href || /^#/i.test(href) || href.startsWith("javascript:")) return;
-  if (window.quicklink?.openExternal) {
-    window.quicklink.openExternal(href);
-  } else {
-    window.open(href, "_blank", "noopener,noreferrer");
-  }
+  window.open(href, "_blank", "noopener,noreferrer");
 };
 
 // 预览区链接点击拦截: 冒泡到容器统一用系统浏览器打开

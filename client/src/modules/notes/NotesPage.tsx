@@ -41,6 +41,7 @@ import { noteApi, attachmentApi, downloadBlob } from "../../services/api";
 import NoteViewer from "./NoteViewer";
 import AttachmentManager from "./AttachmentManager";
 import { usePageVisibility } from "../../hooks/usePageVisibility";
+import { useCapabilityStore } from "../../stores/capabilityStore";
 
 const { Search } = Input;
 
@@ -57,6 +58,8 @@ const NotesPage: React.FC = () => {
   const { token } = theme.useToken();
   // 页面可见性: CachedPages 架构下页面不卸载, 通过 isActive 释放重型资源 (Milkdown 编辑器)
   const isActive = usePageVisibility("/notes");
+  // Windows 服务运行在 session 0, 无法在用户桌面弹出 Typora / 资源管理器窗口, 据此隐藏相关菜单项
+  const launchNativeGui = useCapabilityStore((s) => s.launchNativeGui);
   const [notes, setNotes] = useState<Note[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,15 +292,17 @@ const NotesPage: React.FC = () => {
       items.push({ type: "divider" });
       items.push({ key: "rename", icon: <FileMarkdownOutlined />, label: "重命名" });
       items.push({ key: "move", icon: <SendOutlined />, label: "移动到" });
-      if (node.type === "note") {
+      if (node.type === "note" && launchNativeGui) {
         items.push({ key: "openInTypora", icon: <EditOutlined />, label: "打开于 Typora" });
       }
       items.push({ key: "copyPath", icon: <CopyOutlined />, label: "复制文件路径" });
-      items.push({ key: "openFolder", icon: <FolderOpenOutlined />, label: "打开于资源管理器" });
+      if (launchNativeGui) {
+        items.push({ key: "openFolder", icon: <FolderOpenOutlined />, label: "打开于资源管理器" });
+      }
       items.push({ key: "delete", icon: <DeleteOutlined />, label: "删除", danger: true });
     }
     return items;
-  }, [ctxMenu]); // ctxMenu.node 已包含所需信息, 无需依赖 notes
+  }, [ctxMenu, launchNativeGui]); // ctxMenu.node 已包含所需信息, 无需依赖 notes
 
   const handleCtxMenuClick = ({ key }: { key: string }) => {
     if (!ctxMenu) return;
