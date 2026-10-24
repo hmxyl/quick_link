@@ -21,6 +21,7 @@ router.post("/:id/move", noteController.move);
 router.delete("/:id/permanent", noteController.removePermanent);
 router.get("/:id/file-path", noteController.getFilePath);
 router.post("/:id/open-folder", noteController.openFolder);
+router.post("/:id/open-file", noteController.openFile);
 router.post("/:id/open-in-typora", noteController.openInTypora);
 
 // 数据操作

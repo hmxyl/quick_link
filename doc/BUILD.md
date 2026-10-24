@@ -17,7 +17,7 @@
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
 | 链接管理 | 标签分组卡片展示（每标签可配置每行链接数）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗（含每行链接数配置、↑/↓ 排序，链接展示顺序与标签排序一致）、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
-| 笔记管理 | 文件夹树（真实文件目录树存储，左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键复制文件路径（打开于 Typora / 资源管理器仅非服务模式可用，见 §9.5；Typora 支持自定义安装路径）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
+| 笔记管理 | 文件夹树（真实文件目录树存储，展开即显示目录下全部文件与子文件夹，文件名含扩展名，非 Markdown 文件单击交系统默认程序打开；左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键复制文件路径（打开于 Typora / 资源管理器仅非服务模式可用，见 §9.5；Typora 支持自定义安装路径）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
 | 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理（键盘方向键导航）、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth，JSON 一键格式化，可编辑接口名称）、响应查看（状态码/耗时/Body/Headers，JSON 格式化/原始切换）、请求历史记录（点击恢复含响应结果）、集合导出/导入（原生格式 + Postman Collection v2.1 双向兼容）、环境 Postman 格式导入/导出、拷贝为 cURL、导入 cURL | [API.md](./API.md) |
 | Windows 服务版 | NSIS 安装包把服务端注册为 **Windows 服务**（NSSM + 随包 `node.exe`），开机自动启动，通过浏览器访问 `http://localhost:3000`；仅监听 `127.0.0.1`，不对局域网开放；开始菜单附「QuickLink Service Control」运维面板 | 本文 §9 |
@@ -83,9 +83,9 @@ quick_link/
 │   │   ├── types/index.ts
 │   │   └── app.ts              # Express 入口 (启动时自动迁移; STATIC_DIR 静态托管; HOST 绑定; SIGINT/SIGTERM/SIGBREAK 优雅退出)
 │   ├── service.js              # Windows 服务入口: 解析 %ProgramData%\QuickLink 配置 → 注入环境变量 → 加载 dist/app.js
-│   └── scripts/test-notes-api.js  # 笔记模块 API 冒烟测试 (19 项断言)
+│   └── scripts/test-notes-api.js  # 笔记模块 API 冒烟测试 (28 项断言)
 ├── user_data/                  # 全部用户数据 (运行时生成, gitignore)
-│   ├── note/<userId>/          # 笔记文件树 (文件夹=目录, 文档=.md, 回收站=.trash)
+│   ├── note/<userId>/          # 笔记文件树 (文件夹=目录, 文档=.md, 其他文件原样纳管, 回收站=.trash)
 │   ├── attachment/             # 笔记附件文件体 (uuid 文件名)
 │   └── *.db                    # users/links/tags/attachments/note_orders/migrations/api_environments/api_collections/api_history
 ├── installer/                  # Windows 服务版安装包 (独立 NSIS 脚本, 不依赖 electron-builder)
@@ -115,7 +115,7 @@ quick_link/
 
 ```
 <数据目录>/               # 开发态 user_data/; 服务版默认 %ProgramData%\QuickLink\data
-├── note/<userId>/      # 文件夹=目录, 文档=.md (UTF-8), 回收站=根下隐藏目录 .trash/
+├── note/<userId>/      # 文件夹=目录, 文档=.md (UTF-8), 其他文件原样纳管 (二进制安全), 回收站=根下隐藏目录 .trash/
 ├── attachment/         # 附件文件体 (uuid + 原扩展名)
 ├── users.db  links.db  accounts.db  tags.db  attachments.db  note_orders.db  custom_icons.db  api_environments.db  api_collections.db  api_history.db  migrations.db
 ```
@@ -345,7 +345,7 @@ NSSM 注册参数（`InstallService`）：
 
 Windows 服务运行在 **session 0**，与用户桌面隔离：服务端 `spawn` 出来的 `explorer.exe` / `Typora.exe` 窗口无法出现在用户桌面上。相关 API（`POST /api/notes/:id/open-folder`、`/open-in-typora`、`/api/notes/attachments/:id/open-folder`、`/open-file`）仍然保留，但服务模式下调用无效果。
 
-处理方式：`GET /api/health` 返回 `capabilities.launchNativeGui`（值为 `!env.SERVICE_MODE`），前端 `capabilityStore` 启动时探测一次并据此隐藏入口——笔记右键菜单的「打开于 Typora」「打开于资源管理器」、附件管理的「打开所在文件夹」按钮。「复制文件路径」保留（服务模式下依然有效，是用户的替代手段）。开发态 `npm run dev` 的服务端在用户会话内，该能力为 `true`，入口照常显示。
+处理方式：`GET /api/health` 返回 `capabilities.launchNativeGui`（值为 `!env.SERVICE_MODE`），前端 `capabilityStore` 启动时探测一次并据此隐藏入口——笔记右键菜单的「打开于 Typora」「打开于资源管理器」、非 md 文件节点的「用系统默认程序打开」（连同单击打开行为，改为提示服务模式无法打开）、附件管理的「打开所在文件夹」按钮。「复制文件路径」保留（服务模式下依然有效，是用户的替代手段）。开发态 `npm run dev` 的服务端在用户会话内，该能力为 `true`，入口照常显示。
 
 `file://` 链接同样降级：浏览器安全策略禁止从 `http://` 页面打开 `file://` URL，原先依赖的 Electron `shell.openExternal` 已随桌面版移除。链接管理点击 `file://` 链接改为把真实本地路径复制到剪贴板并提示（`file:///C:/x` → `C:/x`，`file:////server/share` → `//server/share`，资源管理器地址栏可识别），用户粘贴即可。
 
@@ -451,9 +451,9 @@ devDependencies：vite / @vitejs/plugin-react / typescript / vitest / @testing-l
 
 ## 12. 测试与验证
 
-- **API 冒烟**：`node server/scripts/test-notes-api.js`（需后端运行于 :3000）：覆盖登录、文件夹/文档创建、内容更新、附件上传、重命名及附件 noteId 重映射、列表/下载、zip 导出/导入、软删除→回收站→还原、彻底删除、清空等 19 项断言。
+- **API 冒烟**：`node server/scripts/test-notes-api.js`（默认打后端 :3000，可用环境变量 `API_BASE` 覆盖；脚本首尾各 wipe 一次笔记数据，勿指向生产实例）：覆盖登录、文件夹/文档创建、内容更新、附件上传、重命名及附件 noteId 重映射、列表/下载、zip 导出/导入、软删除→回收站→还原、彻底删除、清空，以及非 Markdown 文件纳管（`type: "file"` 不带正文、内容更新不破坏原始字节、重命名沿用原扩展名、`open-file` 拒绝文件夹与不存在项、Typora 拒绝非 md）等 28 项断言。
 - **单元框架**：server 配 jest/ts-jest，client 配 vitest/@testing-library/react（`npm test`）。
-- **服务版验证**：安装后核对 `sc qc QuickLink` 为 `AUTO_START` 且 `sc query` 为 `RUNNING`；`GET /api/health` 返回 `capabilities.launchNativeGui=false`；`netstat -ano -p tcp` 只应看到 `127.0.0.1:3000` 监听，用局域网 IP 访问应被拒绝；浏览器完成注册/登录/链接与笔记读写；笔记右键菜单不出现「打开于 Typora」「打开于资源管理器」，附件管理不出现「打开所在文件夹」，设置弹窗无「开机自启动」。数据目录指针解析与迁移结果按 `%ProgramData%\QuickLink\logs\service.out.log` 核对。
+- **服务版验证**：安装后核对 `sc qc QuickLink` 为 `AUTO_START` 且 `sc query` 为 `RUNNING`；`GET /api/health` 返回 `capabilities.launchNativeGui=false`；`netstat -ano -p tcp` 只应看到 `127.0.0.1:3000` 监听，用局域网 IP 访问应被拒绝；浏览器完成注册/登录/链接与笔记读写；笔记右键菜单不出现「打开于 Typora」「打开于资源管理器」「用系统默认程序打开」，附件管理不出现「打开所在文件夹」，设置弹窗无「开机自启动」。数据目录指针解析与迁移结果按 `%ProgramData%\QuickLink\logs\service.out.log` 核对。
 - **免安装冒烟**：不装服务也能验证服务端本体——把 `server/dist` + `server/prod_modules`（改名 `node_modules`）+ `service.js` + `client/dist`（改名 `public`）按 §9.2 布局拼到一个目录，设 `QUICKLINK_CONFIG_DIR` 指向临时目录后用任意 `node.exe` 跑 `server/service.js` 即可。
 
 ---
@@ -472,7 +472,7 @@ devDependencies：vite / @vitejs/plugin-react / typescript / vitest / @testing-l
 
 ### 13.2 session 0 隔离与浏览器访问的取舍
 
-Windows 服务运行在 session 0，与用户桌面隔离，服务端 `spawn` 的 GUI 进程（`explorer.exe` / `Typora.exe`）不会出现在用户桌面上。另一种做法是再装一个跑在用户会话里的 helper 进程（登录时启动 + 命名管道通信），但那会重新引入"必须登录才可用"，外加一套 IPC 与生命周期管理，与"开机即起、后台常驻"的初衷冲突。故选择**接受降级 + 前端隐藏入口**：`/api/health` 上报 `capabilities.launchNativeGui`，前端 `capabilityStore` 据此隐藏相关菜单项与按钮，保留「复制文件路径」作为替代。API 本身不删——开发态（`npm run dev`，服务端在用户会话内）该能力为 `true`，入口照常显示。
+Windows 服务运行在 session 0，与用户桌面隔离，服务端 `spawn` 的 GUI 进程（`explorer.exe` / `Typora.exe` / `cmd /c start`）不会出现在用户桌面上。另一种做法是再装一个跑在用户会话里的 helper 进程（登录时启动 + 命名管道通信），但那会重新引入"必须登录才可用"，外加一套 IPC 与生命周期管理，与"开机即起、后台常驻"的初衷冲突。故选择**接受降级 + 前端隐藏入口**：`/api/health` 上报 `capabilities.launchNativeGui`，前端 `capabilityStore` 据此隐藏相关菜单项与按钮，保留「复制文件路径」作为替代。API 本身不删——开发态（`npm run dev`，服务端在用户会话内）该能力为 `true`，入口照常显示。
 
 访问方式改为浏览器，开始菜单/桌面放 `.url` 快捷方式。随之而来的两个具体降级——`file://` 链接无法从 `http://` 页面打开（改为复制本地路径到剪贴板）、失去系统托盘的"最小化到后台"（服务本就常驻后台，关掉浏览器标签即可）——记录在 §9.5。
 

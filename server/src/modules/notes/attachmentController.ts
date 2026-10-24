@@ -59,8 +59,8 @@ function revealInFileManager(file: string) {
   else spawn("xdg-open", [path.dirname(file)], opts).unref();
 }
 
-// 用系统默认程序打开文件 (Windows: cmd /c start)
-function openWithSystem(file: string) {
+// 用系统默认程序打开文件 (Windows: cmd /c start); 笔记树中的非 Markdown 文件同样复用
+export function openWithSystem(file: string) {
   const opts = { detached: true, stdio: "ignore" as const };
   if (process.platform === "win32") spawn("cmd.exe", ["/c", "start", "", `"${file}"`], opts).unref();
   else if (process.platform === "darwin") spawn("open", [file], opts).unref();

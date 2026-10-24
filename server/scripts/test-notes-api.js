@@ -1,6 +1,8 @@
 // Notes API smoke test (run: node scripts/test-notes-api.js)
 // 笔记 id 为相对路径 (可含 "/"), 拼入 URL 前统一 encode
-const BASE = "http://localhost:3000/api";
+// 目标后端可用 API_BASE 覆盖 (脚本结尾会 wipe 笔记数据, 勿指向生产实例)
+const BASE = `${process.env.API_BASE || "http://localhost:3000"}/api`;
+const AdmZip = require("adm-zip");
 const enc = (id) => encodeURIComponent(id);
 let TOKEN = "";
 
@@ -27,6 +29,9 @@ function log(name, ok, extra) {
   const login = await api("POST", "/auth/login", { username: "uitest", password: "uitest123" });
   TOKEN = login.data.data.token;
   log("login", login.status === 200);
+
+  // 清空残留数据, 保证重复运行时断言稳定 (重名不会追加 " (2)")
+  await api("POST", "/notes/wipe");
 
   // create folder + note
   const folder = await api("POST", "/notes", { type: "folder", title: "工作" });
@@ -81,6 +86,54 @@ function log(name, ok, extra) {
   await api("DELETE", `/notes/${enc(scratch.data.data._id)}`);
   const perm = await api("DELETE", `/notes/${enc(scratch.data.data._id)}/permanent`);
   log("permanent delete", perm.status === 200);
+
+  // 非 Markdown 文件: 目录全量纳管 + 二进制安全 (应用不支持新建非 md 文件, 用导入构造)
+  const pdfBytes = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0xff, 0xd9]);
+  const pkg = new AdmZip();
+  pkg.addFile(
+    "manifest.json",
+    Buffer.from(
+      JSON.stringify({
+        app: "quicklink-notes",
+        version: 3,
+        notes: [
+          { id: "混合", type: "folder", title: "混合", content: "", parentId: null },
+          { id: "混合/年度报告.pdf", type: "file", title: "年度报告.pdf", content: "", parentId: "混合" },
+          { id: "混合/备忘.md", type: "note", title: "备忘.md", content: "# 备忘", parentId: "混合" },
+        ],
+        attachments: [],
+      }),
+      "utf8"
+    )
+  );
+  pkg.addFile("notes/混合/年度报告.pdf", pdfBytes);
+  const mixImp = await api("POST", "/notes/import", pkg.toBuffer(), true);
+  log("import mixed files", mixImp.status === 200, mixImp.data.message);
+
+  lst = await api("GET", "/notes");
+  const pdf = lst.data.data.find((n) => n._id === "混合/年度报告.pdf");
+  const md = lst.data.data.find((n) => n._id === "混合/备忘.md");
+  log("non-md file listed as type=file", !!pdf && pdf.type === "file" && pdf.title === "年度报告.pdf");
+  log("non-md file carries no content", !!pdf && pdf.content == null);
+  log("md title keeps extension", !!md && md.type === "note" && md.title === "备忘.md" && md.content === "# 备忘");
+
+  // 对非 md 文件写 content 应被忽略: 导出仍是原始字节 (二进制不被破坏)
+  await api("PUT", `/notes/${enc(pdf._id)}`, { content: "覆盖成文本" });
+  const exp2 = await api("GET", "/notes/export");
+  const pdfBack = new AdmZip(Buffer.from(exp2.data)).getEntry("notes/混合/年度报告.pdf");
+  log("non-md bytes preserved after content update", !!pdfBack && Buffer.from(pdfBack.getData()).equals(pdfBytes));
+
+  // 重命名省略扩展名时沿用原扩展名
+  const renPdf = await api("PUT", `/notes/${enc(pdf._id)}`, { title: "年报" });
+  log("rename keeps original extension", renPdf.status === 200 && renPdf.data.data._id === "混合/年报.pdf", renPdf.data.data && renPdf.data.data._id);
+
+  // 打开类接口只验证拒绝分支, 不实际拉起 GUI
+  const openDir = await api("POST", `/notes/${enc("混合")}/open-file`);
+  log("open-file rejects folder", openDir.status === 400);
+  const openMissing = await api("POST", `/notes/${enc("混合/不存在.pdf")}/open-file`);
+  log("open-file 404 on missing file", openMissing.status === 404);
+  const typoraPdf = await api("POST", `/notes/${enc(renPdf.data.data._id)}/open-in-typora`);
+  log("typora rejects non-md", typoraPdf.status === 400, typoraPdf.data.error);
 
   // import zip (same exported buffer)
   const imp = await api("POST", "/notes/import", zipBuf, true);

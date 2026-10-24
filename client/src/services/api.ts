@@ -211,6 +211,10 @@ export const noteApi = {
   openFolder: (id: string) =>
     api.post<ApiResponse>(`/notes/${encId(id)}/open-folder`).then((r) => r.data),
 
+  // 用系统默认程序打开笔记目录下的文件 (桌面版生效)
+  openFile: (id: string) =>
+    api.post<ApiResponse>(`/notes/${encId(id)}/open-file`).then((r) => r.data),
+
   // 使用 Typora 打开笔记 (桌面版生效)
   openInTypora: (id: string) =>
     api.post<ApiResponse>(`/notes/${encId(id)}/open-in-typora`).then((r) => r.data),

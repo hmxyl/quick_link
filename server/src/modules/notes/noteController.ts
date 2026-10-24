@@ -8,11 +8,15 @@ import { db } from "../../config/database";
 import { env } from "../../config/env";
 import { AuthRequest } from "../../middleware/auth";
 import type { Note, Attachment, NoteOrder } from "../../types";
+import { openWithSystem } from "./attachmentController";
 
-// 笔记以真实文件目录形式存储: DATA_DIR/note/<userId>/... (文件夹=目录, 文档=.md 文件)
+// 笔记以真实文件目录形式存储: DATA_DIR/note/<userId>/... (文件夹=目录, 文档=.md 文件, 其余文件原样收录)
 // 节点 _id 为相对用户根目录的路径 (POSIX 分隔符), 回收站为根下隐藏目录 .trash
 
 const TRASH = ".trash";
+
+/** 仅 Markdown 走文本读写; 其他文件按二进制处理 (不读正文, 不可编辑) */
+const isMarkdown = (name: string) => name.toLowerCase().endsWith(".md");
 
 const rootOf = (userId: string) => path.join(env.DATA_DIR, "note", userId);
 const trashOf = (userId: string) => path.join(rootOf(userId), TRASH);
@@ -29,16 +33,25 @@ function safeName(name: string): string {
   return cleaned;
 }
 
-/** 同级重名自动追加 (n) */
-function uniquePath(dir: string, base: string, isFolder: boolean): string {
-  const ext = isFolder ? "" : ".md";
-  let candidate = path.join(dir, base + ext);
+/** 同级重名自动追加 (n); name 为完整条目名 (文件含扩展名, 文件夹为目录名) */
+function uniquePath(dir: string, name: string): string {
+  const ext = path.extname(name);
+  const stem = ext ? name.slice(0, name.length - ext.length) : name;
+  let candidate = path.join(dir, name);
   let i = 2;
   while (fs.existsSync(candidate)) {
-    candidate = path.join(dir, `${base} (${i})${ext}`);
+    candidate = path.join(dir, `${stem} (${i})${ext}`);
     i++;
   }
   return candidate;
+}
+
+/** 重命名后的条目名: 文件夹原样, 文件未写扩展名时沿用原扩展名 */
+function renamedName(oldName: string, newTitle: string, isFolder: boolean): string {
+  const cleaned = safeName(newTitle);
+  if (isFolder) return cleaned;
+  const oldExt = path.extname(oldName);
+  return oldExt && !path.extname(cleaned) ? cleaned + oldExt : cleaned;
 }
 
 /** 相对路径 → 绝对路径 (防越权) */
@@ -55,19 +68,34 @@ function relOf(abs: string, root: string): string {
   return path.relative(root, abs).split(path.sep).join("/");
 }
 
-function mkNote(userId: string, rel: string, type: "folder" | "note", content: string, deleted: boolean, st: fs.Stats): Note {
-  const base = rel.split("/").pop() || rel;
+function mkNote(userId: string, rel: string, type: Note["type"], content: string | undefined, deleted: boolean, st: fs.Stats): Note {
   return {
     _id: rel,
     userId,
     type,
-    title: type === "note" ? base.replace(/\.md$/, "") : base,
-    content: type === "note" ? content : undefined,
+    title: rel.split("/").pop() || rel,
+    content,
     parentId: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : null,
     deletedAt: deleted ? st.mtime.toISOString() : null,
     createdAt: st.birthtime.toISOString(),
     updatedAt: st.mtime.toISOString(),
   };
+}
+
+/** 由磁盘条目构造 Note: 目录=folder, .md=note(读正文), 其余=file(不读正文) */
+function noteFromAbs(userId: string, abs: string, rel: string, deleted: boolean): Note {
+  const st = fs.statSync(abs);
+  if (st.isDirectory()) return mkNote(userId, rel, "folder", undefined, deleted, st);
+  const isMd = isMarkdown(abs);
+  let content: string | undefined;
+  if (isMd) {
+    try {
+      content = fs.readFileSync(abs, "utf8");
+    } catch {
+      content = ""; // 读取失败按空内容
+    }
+  }
+  return mkNote(userId, rel, isMd ? "note" : "file", content, deleted, st);
 }
 
 /** 同级默认比较: 文件夹在前, 同类型按中文名 */
@@ -76,15 +104,22 @@ function defaultCompare(a: fs.Dirent, b: fs.Dirent) {
   return a.name.toLowerCase().localeCompare(b.name.toLowerCase(), "zh-CN");
 }
 
-const baseOfEntry = (e: fs.Dirent) => (e.isDirectory() ? e.name : e.name.endsWith(".md") ? e.name.slice(0, -3) : e.name);
+/**
+ * 排序记录键: 目录名与非 .md 文件用完整名, .md 去掉后缀
+ * .md 去后缀是为兼容既有 note_orders 记录 (显示名已改为含后缀, 但排序键保持不变)
+ */
+const orderKey = (name: string, isFolder: boolean) =>
+  isFolder || !isMarkdown(name) ? name : name.slice(0, -3);
+
+const orderKeyOf = (e: fs.Dirent) => orderKey(e.name, e.isDirectory());
 
 /** 同级排序: 命中自定义顺序的在前 (按 order), 未命中的按默认规则排后 */
 function sortEntries(ents: fs.Dirent[], orderArr: string[] | undefined): fs.Dirent[] {
   if (!orderArr?.length) return [...ents].sort(defaultCompare);
   const pos = new Map(orderArr.map((b, i) => [b, i]));
   return [...ents].sort((a, b) => {
-    const ia = pos.get(baseOfEntry(a));
-    const ib = pos.get(baseOfEntry(b));
+    const ia = pos.get(orderKeyOf(a));
+    const ib = pos.get(orderKeyOf(b));
     if (ia != null && ib != null) return ia - ib;
     if (ia != null) return -1;
     if (ib != null) return 1;
@@ -92,7 +127,7 @@ function sortEntries(ents: fs.Dirent[], orderArr: string[] | undefined): fs.Dire
   });
 }
 
-/** 深度优先遍历目录树 (可选按自定义顺序排列同级) */
+/** 深度优先遍历目录树, 收录全部文件夹与文件 (可选按自定义顺序排列同级) */
 function walk(userId: string, dir: string, relBase: string, deleted: boolean, out: Note[], orderMap?: Map<string, string[]>) {
   if (!fs.existsSync(dir)) return;
   const ents = sortEntries(
@@ -102,24 +137,12 @@ function walk(userId: string, dir: string, relBase: string, deleted: boolean, ou
   for (const ent of ents) {
     const abs = path.join(dir, ent.name);
     const rel = relBase ? `${relBase}/${ent.name}` : ent.name;
-    let st: fs.Stats;
     try {
-      st = fs.statSync(abs);
+      out.push(noteFromAbs(userId, abs, rel, deleted));
     } catch {
-      continue;
+      continue; // statSync 失败 (失效软链/无权限) 时跳过
     }
-    if (ent.isDirectory()) {
-      out.push(mkNote(userId, rel, "folder", "", deleted, st));
-      walk(userId, abs, rel, deleted, out, orderMap);
-    } else if (ent.name.endsWith(".md")) {
-      let content = "";
-      try {
-        content = fs.readFileSync(abs, "utf8");
-      } catch {
-        /* 读取失败按空内容 */
-      }
-      out.push(mkNote(userId, rel, "note", content, deleted, st));
-    }
+    if (ent.isDirectory()) walk(userId, abs, rel, deleted, out, orderMap);
   }
 }
 
@@ -157,16 +180,15 @@ async function deleteAttachmentRecords(records: Attachment[]) {
 }
 
 /** 移动到目标目录 (自动处理重名), 返回新绝对路径 */
-function moveTo(srcAbs: string, destDir: string, isFolder: boolean): string {
-  const base = isFolder ? path.basename(srcAbs) : path.basename(srcAbs, ".md");
-  const dest = uniquePath(destDir, safeName(base), isFolder);
+function moveTo(srcAbs: string, destDir: string): string {
   ensureDir(destDir);
+  const dest = uniquePath(destDir, path.basename(srcAbs));
   fs.renameSync(srcAbs, dest);
   return dest;
 }
 
 // ---- 自定义排序 (note_orders 集合) ----
-// 文件系统本身无序, 顺序存 NeDB: { userId, parentId(根为""), order: [子项基础名] }
+// 文件系统本身无序, 顺序存 NeDB: { userId, parentId(根为""), order: [子项排序键, 见 orderKey] }
 // 软删除保留条目 (还原后回到原位); 彻底删除后残留条目无害 (显示时自动忽略)
 
 /** 用户全部排序记录 → parentId → order 映射 */
@@ -200,7 +222,7 @@ function saveChildOrder(userId: string, parentRel: string, order: string[]): Pro
   });
 }
 
-/** 某目录下子项基础名, 按当前显示顺序 (自定义顺序优先) */
+/** 某目录下子项排序键, 按当前显示顺序 (自定义顺序优先) */
 async function childBasenames(userId: string, parentRel: string): Promise<string[]> {
   const dirAbs = parentRel ? absOf(userId, parentRel) : rootOf(userId);
   if (!fs.existsSync(dirAbs)) return [];
@@ -209,7 +231,7 @@ async function childBasenames(userId: string, parentRel: string): Promise<string
     fs.readdirSync(dirAbs, { withFileTypes: true }).filter((e) => parentRel || e.name !== TRASH),
     orderMap.get(parentRel)
   );
-  return ents.filter((e) => e.isDirectory() || e.name.endsWith(".md")).map(baseOfEntry);
+  return ents.map(orderKeyOf);
 }
 
 /** 重命名/移动后同步排序记录的父路径前缀 (文件夹路径变化时波及其后代) */
@@ -258,50 +280,50 @@ export async function create(req: AuthRequest, res: Response) {
   }
   const rawTitle = String(title || "").replace(/\.md$/i, "");
   const base = safeName(rawTitle || (type === "folder" ? "未命名文件夹" : "未命名文档"));
-  const target = uniquePath(parentAbs, base, type === "folder");
+  const target = uniquePath(parentAbs, type === "folder" ? base : `${base}.md`);
   if (type === "folder") fs.mkdirSync(target);
   else fs.writeFileSync(target, "", "utf8");
   const rel = relOf(target, rootOf(userId));
-  const note = mkNote(userId, rel, type, "", false, fs.statSync(target));
-  res.json({ success: true, data: note });
+  res.json({ success: true, data: noteFromAbs(userId, target, rel, false) });
 }
 
 // PUT /api/notes/:id  更新标题/内容
 export async function update(req: AuthRequest, res: Response) {
   const userId = req.userId!;
   const rel = req.params.id;
-  const abs = absOf(userId, rel);
+  let abs = absOf(userId, rel);
   if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "笔记不存在" });
   const isFolder = fs.statSync(abs).isDirectory();
   const { title, content } = req.body || {};
 
-  if (typeof content === "string" && !isFolder) {
+  // 仅 Markdown 可写正文; 其他文件按二进制存储, 写 utf8 会损坏文件
+  if (typeof content === "string" && !isFolder && isMarkdown(abs)) {
     fs.writeFileSync(abs, content, "utf8");
   }
 
   let newRel = rel;
   if (typeof title === "string" && title.trim()) {
-    const base = safeName(title.trim().replace(/\.md$/i, ""));
-    const oldBase = isFolder ? path.basename(abs) : path.basename(abs, ".md");
-    if (base && base !== oldBase) {
-      const target = uniquePath(path.dirname(abs), base, isFolder);
+    const oldName = path.basename(abs);
+    const newName = renamedName(oldName, title.trim(), isFolder);
+    if (newName && newName !== oldName) {
+      const target = uniquePath(path.dirname(abs), newName);
       fs.renameSync(abs, target);
+      abs = target;
       newRel = relOf(target, rootOf(userId));
       await remapAttachmentNoteIds(userId, rel, newRel);
-      // 同步自定义排序: 同级基础名条目替换 + (文件夹时) 后代排序记录路径前缀
-      const newBase = isFolder ? path.basename(target) : path.basename(target, ".md");
+      // 同步自定义排序: 同级排序键替换 + (文件夹时) 后代排序记录路径前缀
+      const oldKey = orderKey(oldName, isFolder);
       const parentRel = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
       const arr = await getOrderArr(userId, parentRel);
       if (arr.length) {
-        await saveChildOrder(userId, parentRel, arr.map((b) => (b === oldBase ? newBase : b)));
+        const newKey = orderKey(newName, isFolder);
+        await saveChildOrder(userId, parentRel, arr.map((b) => (b === oldKey ? newKey : b)));
       }
       await remapNoteOrderParentIds(userId, rel, newRel);
     }
   }
 
-  const finalAbs = absOf(userId, newRel);
-  const note = mkNote(userId, newRel, isFolder ? "folder" : "note", isFolder ? "" : fs.readFileSync(finalAbs, "utf8"), false, fs.statSync(finalAbs));
-  res.json({ success: true, data: note });
+  res.json({ success: true, data: noteFromAbs(userId, abs, newRel, false) });
 }
 
 // DELETE /api/notes/:id  软删除 (移入回收站, 整目录移动含后代; 排序条目保留, 还原后回到原位)
@@ -310,8 +332,7 @@ export async function remove(req: AuthRequest, res: Response) {
   const rel = req.params.id;
   const abs = absOf(userId, rel);
   if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "笔记不存在" });
-  const isFolder = fs.statSync(abs).isDirectory();
-  moveTo(abs, path.join(trashOf(userId), path.dirname(rel) === "." ? "" : path.dirname(rel)), isFolder);
+  moveTo(abs, path.join(trashOf(userId), path.dirname(rel) === "." ? "" : path.dirname(rel)));
   res.json({ success: true, message: "已移入回收站" });
 }
 
@@ -321,14 +342,11 @@ export async function restore(req: AuthRequest, res: Response) {
   const rel = req.params.id;
   const abs = absOf(userId, rel, true);
   if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "回收站中不存在该项" });
-  const isFolder = fs.statSync(abs).isDirectory();
   const originParent = path.dirname(absOf(userId, rel));
-  let dest: string;
-  if (fs.existsSync(originParent) && fs.statSync(originParent).isDirectory()) {
-    dest = moveTo(abs, originParent, isFolder);
-  } else {
-    dest = moveTo(abs, rootOf(userId), isFolder);
-  }
+  const dest =
+    fs.existsSync(originParent) && fs.statSync(originParent).isDirectory()
+      ? moveTo(abs, originParent)
+      : moveTo(abs, rootOf(userId));
   const newRel = relOf(dest, rootOf(userId));
   await remapAttachmentNoteIds(userId, rel, newRel);
   res.json({ success: true, message: "已还原" });
@@ -363,34 +381,33 @@ export async function move(req: AuthRequest, res: Response) {
   if (isFolder && (targetRel === rel || targetRel.startsWith(rel + "/"))) {
     return res.status(400).json({ success: false, error: "不能移动到自身或其子文件夹" });
   }
-  const base = isFolder ? path.basename(srcAbs) : path.basename(srcAbs, ".md");
+  const oldName = path.basename(srcAbs);
+  const oldKey = orderKey(oldName, isFolder);
   const idx = typeof index === "number" && Number.isFinite(index) ? Math.max(0, Math.floor(index)) : Number.MAX_SAFE_INTEGER;
 
   if (targetRel === oldParentRel) {
     // 同级重排: 仅更新排序记录, 不动磁盘 (磁盘本身无序, 顺序由 note_orders 决定)
     const list = await childBasenames(userId, targetRel);
-    const rest = list.filter((b) => b !== base);
-    rest.splice(Math.min(idx, rest.length), 0, base);
+    const rest = list.filter((b) => b !== oldKey);
+    rest.splice(Math.min(idx, rest.length), 0, oldKey);
     await saveChildOrder(userId, targetRel, rest);
   } else {
     // 跨文件夹移动: 磁盘移动 (重名自动追加序号) + 附件/排序记录同步
-    const destAbs = uniquePath(targetAbs, safeName(base), isFolder);
+    const destAbs = uniquePath(targetAbs, oldName);
     fs.renameSync(srcAbs, destAbs);
     const newRel = relOf(destAbs, rootOf(userId));
     await remapAttachmentNoteIds(userId, rel, newRel);
     await remapNoteOrderParentIds(userId, rel, newRel);
-    const oldList = (await childBasenames(userId, oldParentRel)).filter((b) => b !== base);
+    const oldList = (await childBasenames(userId, oldParentRel)).filter((b) => b !== oldKey);
     await saveChildOrder(userId, oldParentRel, oldList);
-    const newBase = isFolder ? path.basename(destAbs) : path.basename(destAbs, ".md");
-    const newList = (await childBasenames(userId, targetRel)).filter((b) => b !== newBase);
-    newList.splice(Math.min(idx, newList.length), 0, newBase);
+    const newKey = orderKey(path.basename(destAbs), isFolder);
+    const newList = (await childBasenames(userId, targetRel)).filter((b) => b !== newKey);
+    newList.splice(Math.min(idx, newList.length), 0, newKey);
     await saveChildOrder(userId, targetRel, newList);
-    const note = mkNote(userId, newRel, isFolder ? "folder" : "note", isFolder ? "" : fs.readFileSync(destAbs, "utf8"), false, fs.statSync(destAbs));
-    return res.json({ success: true, message: "已移动", data: note });
+    return res.json({ success: true, message: "已移动", data: noteFromAbs(userId, destAbs, newRel, false) });
   }
 
-  const note = mkNote(userId, rel, isFolder ? "folder" : "note", isFolder ? "" : fs.readFileSync(srcAbs, "utf8"), false, fs.statSync(srcAbs));
-  res.json({ success: true, message: "已排序", data: note });
+  res.json({ success: true, message: "已排序", data: noteFromAbs(userId, srcAbs, rel, false) });
 }
 
 // DELETE /api/notes/:id/permanent  彻底删除 (含后代及其附件)
@@ -401,9 +418,8 @@ export async function removePermanent(req: AuthRequest, res: Response) {
   if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "回收站中不存在该项" });
   // 清理该节点及后代的附件
   const sub: Note[] = [];
-  const isFolder = fs.statSync(abs).isDirectory();
-  if (isFolder) walk(userId, abs, rel, true, sub);
-  else sub.push(mkNote(userId, rel, "note", "", true, fs.statSync(abs)));
+  if (fs.statSync(abs).isDirectory()) walk(userId, abs, rel, true, sub);
+  else sub.push(mkNote(userId, rel, "file", undefined, true, fs.statSync(abs)));
   const rels = sub.map((n) => n._id);
   const attachments = await findUserAttachments(userId);
   await deleteAttachmentRecords(attachments.filter((a) => a.noteId && rels.includes(a.noteId)));
@@ -433,7 +449,7 @@ export async function wipe(req: AuthRequest, res: Response) {
   res.json({ success: true, message: "笔记数据已清空" });
 }
 
-// GET /api/notes/export  导出 zip (manifest + .md 文件树 + 附件)
+// GET /api/notes/export  导出 zip (manifest + 文件树副本 + 附件)
 export async function exportZip(req: AuthRequest, res: Response) {
   const userId = req.userId!;
   const notes: Note[] = [];
@@ -443,7 +459,7 @@ export async function exportZip(req: AuthRequest, res: Response) {
   const zip = new AdmZip();
   const manifest = {
     app: "quicklink-notes",
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     notes: notes.map((n) => ({
       id: n._id,
@@ -466,9 +482,12 @@ export async function exportZip(req: AuthRequest, res: Response) {
   };
   zip.addFile("manifest.json", Buffer.from(JSON.stringify(manifest, null, 2), "utf8"));
 
-  // 可读 .md 文件树 (与存储结构一致)
+  // 文件树副本 (与存储结构一致): .md 写文本, 其他文件按原始字节拷贝
   for (const n of notes) {
-    if (n.type === "note") zip.addFile(`notes/${n._id}`, Buffer.from(n.content || "", "utf8"));
+    if (n.type === "folder") continue;
+    const abs = path.join(rootOf(userId), n._id);
+    if (!fs.existsSync(abs)) continue;
+    zip.addFile(`notes/${n._id}`, n.type === "note" ? Buffer.from(n.content || "", "utf8") : fs.readFileSync(abs));
   }
 
   // 附件文件
@@ -524,11 +543,20 @@ export async function importZip(req: AuthRequest, res: Response) {
       const parentRel = item.parentId && idMap.has(item.parentId) ? idMap.get(item.parentId)! : null;
       const parentAbs = parentRel ? absOf(userId, parentRel) : rootOf(userId);
       if (!fs.existsSync(parentAbs) || !fs.statSync(parentAbs).isDirectory()) continue;
-      const isFolder = item.type === "folder";
-      const base = safeName(String(item.title || "未命名").replace(/\.md$/i, ""));
-      const target = uniquePath(parentAbs, base, isFolder);
-      if (isFolder) fs.mkdirSync(target);
-      else fs.writeFileSync(target, String(item.content || ""), "utf8");
+      const title = String(item.title || "未命名");
+      // note 的 title 在 v2 包中不含 .md, v3 起为完整文件名 → 统一去后缀再补 .md
+      const name = item.type === "note" ? `${safeName(title.replace(/\.md$/i, ""))}.md` : safeName(title);
+      const target = uniquePath(parentAbs, name);
+      if (item.type === "folder") {
+        fs.mkdirSync(target);
+      } else if (item.type === "note") {
+        fs.writeFileSync(target, String(item.content || ""), "utf8");
+      } else {
+        // 非 .md 文件的正文只存在于 zip 条目中, 条目缺失时无法还原
+        const rawEntry = zip.getEntry(`notes/${item.id}`);
+        if (!rawEntry) continue;
+        fs.writeFileSync(target, rawEntry.getData());
+      }
       const newRel = relOf(target, rootOf(userId));
       idMap.set(item.id, newRel);
       pending.splice(i, 1);
@@ -604,6 +632,24 @@ export function openFolder(req: AuthRequest, res: Response) {
   res.json({ success: true, message: "已打开所在文件夹" });
 }
 
+// POST /api/notes/:id/open-file  用系统默认程序打开笔记目录下的文件
+export function openFile(req: AuthRequest, res: Response) {
+  const userId = req.userId!;
+  const rel = req.params.id;
+  let abs: string;
+  try {
+    abs = absOf(userId, rel);
+  } catch {
+    return res.status(400).json({ success: false, error: "非法路径" });
+  }
+  if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "文件不存在" });
+  if (fs.statSync(abs).isDirectory()) {
+    return res.status(400).json({ success: false, error: "文件夹请用「打开于资源管理器」" });
+  }
+  openWithSystem(abs);
+  res.json({ success: true, message: "已打开文件" });
+}
+
 // ---- Typora 编辑支持 ----
 
 /** 查找 Typora 可执行文件路径 (找到返回绝对路径, 未找到返回 null) */
@@ -671,6 +717,9 @@ export function openInTypora(req: AuthRequest, res: Response) {
   if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: "笔记文件不存在" });
   if (fs.statSync(abs).isDirectory()) {
     return res.status(400).json({ success: false, error: "无法用 Typora 打开文件夹" });
+  }
+  if (!isMarkdown(abs)) {
+    return res.status(400).json({ success: false, error: "仅 Markdown 文档可用 Typora 打开" });
   }
   const typoraPath = findTypora();
   if (!typoraPath) {

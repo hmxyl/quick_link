@@ -71,12 +71,12 @@ export interface Tag {
   createdAt: string;
 }
 
-// Note document (markdown note or folder, tree via parentId)
+// Note document (markdown note, arbitrary file, or folder; tree via parentId)
 export interface Note {
-  _id: string; // 相对用户笔记根目录的路径 (文件夹=目录, 文档=.md 文件)
+  _id: string; // 相对用户笔记根目录的路径 (文件夹=目录, 文档/文件=磁盘文件)
   userId: string;
-  type: "folder" | "note";
-  title: string;
+  type: "folder" | "note" | "file"; // note=.md 可编辑文档, file=其他文件 (不读正文, 交系统程序打开)
+  title: string; // 完整条目名, 文件含扩展名 (如 周报.md / 报告.pdf)
   content?: string; // markdown, note type only
   parentId: string | null; // 父目录相对路径, null 为根级
   deletedAt: string | null; // 非空即位于回收站 (.trash 目录)

@@ -20,6 +20,7 @@ import {
   CopyOutlined,
   EditOutlined,
   FileMarkdownOutlined,
+  FileOutlined,
   FolderOutlined,
   FolderOpenOutlined,
   FileAddOutlined,
@@ -34,6 +35,7 @@ import {
   UndoOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  NodeCollapseOutlined,
   SendOutlined,
 } from "@ant-design/icons";
 import type { Attachment, Note } from "../../types";
@@ -45,8 +47,13 @@ import { useCapabilityStore } from "../../stores/capabilityStore";
 
 const { Search } = Input;
 
-// 左侧文件夹面板收起状态的持久化键
+// 左侧文件夹面板收起状态与宽度的持久化键
 const PANEL_COLLAPSED_KEY = "ql-note-panel-collapsed";
+const PANEL_WIDTH_KEY = "ql-note-panel-width";
+// 300 是面板支持拖拽之前的固定宽度, 保留为可拖拽的下限
+const PANEL_MIN_WIDTH = 300;
+const PANEL_MAX_WIDTH = 680;
+const PANEL_DEFAULT_WIDTH = 400;
 
 interface CtxMenuState {
   x: number;
@@ -80,6 +87,12 @@ const NotesPage: React.FC = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(
     () => localStorage.getItem(PANEL_COLLAPSED_KEY) === "1"
   );
+  // 面板宽度可拖拽, 初始值读取上次保存的宽度 (缺失或非法则用默认值)
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+    return saved >= PANEL_MIN_WIDTH ? Math.min(saved, PANEL_MAX_WIDTH) : PANEL_DEFAULT_WIDTH;
+  });
+  const [resizing, setResizing] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const treeRef = useRef<any>(null);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -123,18 +136,11 @@ const NotesPage: React.FC = () => {
     };
   }, []);
 
-  // 默认展开所有文件夹
-  // 依赖 active (文件夹列表) 而非 notes.length, 避免删除/新增时计数不变导致不刷新
-  const folderIds = useMemo(() => active.filter((n) => n.type === "folder").map((n) => n._id).join(","), [active]);
+  // 搜索时展开全部文件夹, 保证命中项可见; 清空搜索恢复默认的全收起
   useEffect(() => {
-    setExpandedKeys(folderIds.split(",").filter(Boolean));
-  }, [folderIds]);
-
-  // 搜索时展开全部文件夹, 保证命中项可见
-  useEffect(() => {
-    if (search.trim()) {
-      setExpandedKeys(active.filter((n) => n.type === "folder").map((n) => n._id));
-    }
+    setExpandedKeys(
+      search.trim() ? active.filter((n) => n.type === "folder").map((n) => n._id) : []
+    );
   }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 点击其他位置关闭右键菜单 (用 mousedown 而非 contextmenu, 避免与 onRightClick 时序冲突)
@@ -269,6 +275,23 @@ const NotesPage: React.FC = () => {
     return build(null);
   }, [active, moveTarget]);
 
+  // ---- 非 Markdown 文件 ----
+
+  // 非 .md 文件不在应用内预览, 直接交系统默认程序打开 (服务模式下无桌面可弹窗)
+  const openExternalFile = async (node: Note) => {
+    if (!launchNativeGui) {
+      message.warning("当前为服务模式, 无法在桌面打开文件");
+      return;
+    }
+    try {
+      const r = await noteApi.openFile(node._id);
+      if (r.success) message.success(`正在打开 ${node.title}`);
+      else message.error(r.error || "打开失败");
+    } catch {
+      message.error("打开失败");
+    }
+  };
+
   // ---- 右键菜单 ----
 
   const ctxItems = useMemo(() => {
@@ -284,17 +307,20 @@ const NotesPage: React.FC = () => {
     if (node?.type === "folder") {
       items.push({ key: "newSubFile", icon: <FileAddOutlined />, label: "新建子层文件" });
     }
-    // 右键笔记节点时, 也允许新建同级文件
-    if (node?.type === "note") {
-      items.push({ key: "newSiblingFile", icon: <FileAddOutlined />, label: "新建同级文件" });
+    // 右键文件节点时, 也允许新建同级文档
+    if (node && node.type !== "folder") {
+      items.push({ key: "newSiblingFile", icon: <FileAddOutlined />, label: "新建同级文档" });
     }
     if (node) {
       items.push({ type: "divider" });
-      items.push({ key: "rename", icon: <FileMarkdownOutlined />, label: "重命名" });
-      items.push({ key: "move", icon: <SendOutlined />, label: "移动到" });
+      if (node.type === "file" && launchNativeGui) {
+        items.push({ key: "openFile", icon: <ExportOutlined />, label: "用系统默认程序打开" });
+      }
       if (node.type === "note" && launchNativeGui) {
         items.push({ key: "openInTypora", icon: <EditOutlined />, label: "打开于 Typora" });
       }
+      items.push({ key: "rename", icon: <EditOutlined />, label: "重命名" });
+      items.push({ key: "move", icon: <SendOutlined />, label: "移动到" });
       items.push({ key: "copyPath", icon: <CopyOutlined />, label: "复制文件路径" });
       if (launchNativeGui) {
         items.push({ key: "openFolder", icon: <FolderOpenOutlined />, label: "打开于资源管理器" });
@@ -316,6 +342,7 @@ const NotesPage: React.FC = () => {
       case "newSiblingFile": createItem("note", node?.parentId || null); break;
       case "rename": if (node) rename(node); break;
       case "move": if (node) openMoveModal(node); break;
+      case "openFile": if (node) openExternalFile(node); break;
       case "copyPath":
         if (node) {
           noteApi.getFilePath(node._id).then((r) => {
@@ -395,10 +422,12 @@ const NotesPage: React.FC = () => {
           icon: ({ expanded }: { expanded?: boolean }) =>
             n.type === "folder" ? (
               expanded ? <FolderOpenOutlined /> : <FolderOutlined />
-            ) : (
+            ) : n.type === "note" ? (
               <FileMarkdownOutlined />
+            ) : (
+              <FileOutlined />
             ),
-          isLeaf: n.type === "note",
+          isLeaf: n.type !== "folder",
           children: n.type === "folder" ? build(n._id) : undefined,
         }));
 
@@ -545,6 +574,32 @@ const NotesPage: React.FC = () => {
     });
   };
 
+  // 拖拽面板右边缘调整宽度。监听挂在 document 上, 鼠标移出面板也不会中断拖拽。
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    let latest = startWidth;
+    setResizing(true);
+    // 拖动期间禁止选中文本, 并让整页光标保持 col-resize
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    const onMove = (ev: MouseEvent) => {
+      latest = Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_MAX_WIDTH, Math.round(startWidth + ev.clientX - startX)));
+      setPanelWidth(latest);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      setResizing(false);
+      localStorage.setItem(PANEL_WIDTH_KEY, String(latest));
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
   const handleExport = async () => {
     const blob = await noteApi.exportZip();
     const date = new Date().toISOString().slice(0, 10);
@@ -610,19 +665,36 @@ const NotesPage: React.FC = () => {
       {topBar}
 
       <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
-      {/* 左侧: 搜索 + 文件夹树 / 回收站 (支持收起展开) */}
+      {/* 左侧: 搜索 + 文件夹树 / 回收站 (支持收起展开, 右边缘可拖拽调宽) */}
       <div
         style={{
-          width: panelCollapsed ? 48 : 300,
+          width: panelCollapsed ? 48 : panelWidth,
+          position: "relative",
           display: "flex",
           flexDirection: "column",
           border: "1px solid #f0f0f0",
           borderRadius: 8,
           padding: 8,
-          transition: "width 0.2s",
+          // 拖拽时关掉过渡动画, 否则宽度跟不上鼠标
+          transition: resizing ? "none" : "width 0.2s",
           flexShrink: 0,
         }}
       >
+        {!panelCollapsed && (
+          <div
+            title="拖拽调整面板宽度"
+            onMouseDown={startResize}
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              right: -6,
+              width: 12,
+              cursor: "col-resize",
+              zIndex: 5,
+            }}
+          />
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: panelCollapsed ? 0 : 8 }}>
           <Tooltip title={panelCollapsed ? "展开文件夹面板" : "收起文件夹面板"}>
             <Button
@@ -647,6 +719,15 @@ const NotesPage: React.FC = () => {
         <>
         <div style={{ marginBottom: 8, display: "flex", gap: 6 }}>
           <Search placeholder="搜索标题或内容" allowClear onSearch={setSearch} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1 }} />
+          {view === "library" && (
+            <Tooltip title="收起所有文件夹">
+              <Button
+                icon={<NodeCollapseOutlined />}
+                disabled={!expandedKeys.length}
+                onClick={() => setExpandedKeys([])}
+              />
+            </Tooltip>
+          )}
           {view === "library" && (
             <Tooltip title="在第一级目录新建">
               <Dropdown
@@ -695,12 +776,16 @@ const NotesPage: React.FC = () => {
                   setHighlightIds([]); // 用户手动导航后清除附件归属高亮
                 }}
                 onClick={(_e, node) => {
-                  if (!node.isLeaf) {
-                    const key = String(node.key);
-                    setExpandedKeys((prev) =>
-                      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-                    );
+                  const key = String(node.key);
+                  if (node.isLeaf) {
+                    // 非 Markdown 文件单击即交系统默认程序打开
+                    const n = active.find((x) => x._id === key);
+                    if (n?.type === "file") openExternalFile(n);
+                    return;
                   }
+                  setExpandedKeys((prev) =>
+                    prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+                  );
                 }}
                 onRightClick={({ node, event }) => {
                   event.preventDefault();
@@ -744,7 +829,7 @@ const NotesPage: React.FC = () => {
                     ]}
                   >
                     <span style={{ maxWidth: 130, display: "inline-block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle" }}>
-                      {n.type === "folder" ? <FolderOutlined /> : <FileMarkdownOutlined />} {n.title}
+                      {n.type === "folder" ? <FolderOutlined /> : n.type === "note" ? <FileMarkdownOutlined /> : <FileOutlined />} {n.title}
                     </span>
                   </List.Item>
                 )}
@@ -780,7 +865,13 @@ const NotesPage: React.FC = () => {
           />
         ) : (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Empty description="选择左侧笔记查看, 右键新建文档" />
+            <Empty
+              description={
+                selectedNode?.type === "file"
+                  ? `「${selectedNode.title}」不是 Markdown 文档, 单击文件名用系统默认程序打开`
+                  : "选择左侧笔记查看, 右键新建文档"
+              }
+            />
           </div>
         )}
       </div>

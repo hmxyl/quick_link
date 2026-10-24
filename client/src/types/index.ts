@@ -46,9 +46,9 @@ export interface Tag {
 }
 
 export interface Note {
-  _id: string; // 相对用户笔记根目录的路径 (文件夹=目录, 文档=.md 文件)
-  type: "folder" | "note";
-  title: string;
+  _id: string; // 相对用户笔记根目录的路径 (文件夹=目录, 文档/文件=磁盘文件)
+  type: "folder" | "note" | "file"; // note=.md 可编辑文档, file=其他文件 (交系统程序打开)
+  title: string; // 完整条目名, 文件含扩展名
   content?: string;
   parentId: string | null;
   deletedAt: string | null;
