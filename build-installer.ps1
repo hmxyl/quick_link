@@ -40,11 +40,18 @@ function Assert-Sha256 {
 function Find-MakeNsis {
   # Prefer a locally cached NSIS tree, then PATH, then the electron-builder cache
   # (present on machines that previously built the Electron package).
-  $hit = Get-ChildItem "$cache\nsis" -Recurse -Filter makensis.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($hit) { return $hit.FullName }
+  # The electron-builder nsis-3.0.4.1 cache ships a broken 2.5 KB root-level
+  # makensis.exe stub (fails to start with 0xc0000142) next to the real
+  # Bin\makensis.exe compiler, and the recursive "first match" order is not
+  # stable. Keep only candidates > 100 KB (the real compiler is ~440 KB) and
+  # prefer the largest one.
+  $local = Get-ChildItem "$cache\nsis" -Recurse -Filter makensis.exe -ErrorAction SilentlyContinue |
+    Where-Object { $_.Length -gt 100KB } | Sort-Object Length -Descending | Select-Object -First 1
+  if ($local) { return $local.FullName }
   $cmd = Get-Command makensis -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
-  $eb = Get-ChildItem "$env:LOCALAPPDATA\electron-builder\Cache\nsis" -Recurse -Filter makensis.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+  $eb = Get-ChildItem "$env:LOCALAPPDATA\electron-builder\Cache\nsis" -Recurse -Filter makensis.exe -ErrorAction SilentlyContinue |
+    Where-Object { $_.Length -gt 100KB } | Sort-Object Length -Descending | Select-Object -First 1
   if ($eb) { return $eb.FullName }
   return $null
 }
