@@ -4,7 +4,18 @@ REM so non-ASCII text here would turn into mojibake on non-English systems)
 setlocal EnableExtensions
 set "SERVICE=QuickLink"
 set "NSSM=%~dp0nssm\nssm.exe"
-set "URL=http://localhost:3000"
+REM Port is chosen at install time. The installer writes it as plain ASCII digits to
+REM %ProgramData%\QuickLink\port.txt (canonical, same file the service reads) and a copy
+REM next to this script (%~dp0port.txt). Read it back so "Open in browser" uses the right URL.
+set "PORTFILE=%ProgramData%\QuickLink\port.txt"
+set "PORT="
+if exist "%PORTFILE%" set /p PORT=<"%PORTFILE%"
+if not defined PORT if exist "%~dp0port.txt" set /p PORT=<"%~dp0port.txt"
+if defined PORT set "PORT=%PORT: =%"
+if not defined PORT set "PORT=3000"
+REM Sanity check: anything that is not pure digits (e.g. a corrupted UTF-16 file) falls back to 3000
+echo(%PORT%|findstr /r "^[0-9][0-9]*$" >nul || set "PORT=3000"
+set "URL=http://localhost:%PORT%"
 set "LOGDIR=%ProgramData%\QuickLink\logs"
 set "DATADIRFILE=%ProgramData%\QuickLink\data_dir.txt"
 
@@ -22,6 +33,7 @@ echo   QuickLink Service Control
 echo ==================================================
 sc query "%SERVICE%" 2>nul | findstr /C:"STATE"
 if errorlevel 1 echo   Service is NOT installed.
+echo   URL: %URL%
 echo.
 echo   [1] Start service
 echo   [2] Stop service

@@ -4,12 +4,17 @@ import { db } from "../../config/database";
 import { AuthRequest } from "../../middleware/auth";
 import { Link, ListQuery } from "../../types";
 import { isLegacyCipher } from "../../services/cryptoService";
+import { normalizeColor } from "./presetColorController";
 
 // 旧版主密码密文已无法解密, 转为占位提示
 function plainValue(v?: string): string | null {
   if (!v) return null;
   return isLegacyCipher(v) ? "(旧版密文, 无法查看)" : v;
 }
+
+// 校验并归一化链接背景色: 仅接受 #RGB/#RGBA/#RRGGBB/#RRGGBBAA 十六进制色值 (统一小写),
+// 其余视为清除 (null)。与预设背景色 (presetColorController.normalizeColor) 共用同一判定。
+const sanitizeBackgroundColor = normalizeColor;
 
 // Normalize a URL: convert local file paths to file:/// URLs
 function normalizeUrl(input: string): string {
@@ -194,6 +199,7 @@ export async function list(req: AuthRequest, res: Response): Promise<void> {
       title: doc.title,
       description: doc.description,
       icon: doc.icon,
+      backgroundColor: doc.backgroundColor || null,
       tag: doc.tag || (doc.tags && doc.tags.length > 0 ? doc.tags[0] : "其他"),
       isFavorite: doc.isFavorite,
       isArchived: doc.isArchived,
@@ -260,6 +266,7 @@ export async function listAll(req: AuthRequest, res: Response): Promise<void> {
         title: doc.title,
         description: doc.description,
         icon: doc.icon,
+        backgroundColor: doc.backgroundColor || null,
         tag: tagName,
         isFavorite: doc.isFavorite,
         isArchived: doc.isArchived,
@@ -309,7 +316,10 @@ export async function getById(req: AuthRequest, res: Response): Promise<void> {
 
 export async function create(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { url, title, description, icon, tag, tags, accounts } = req.body;
+    const { url, title, description, icon, tag, tags, accounts, backgroundColor } = req.body;
+
+    // 背景色: 校验十六进制色值, 非法/缺失存 null (使用默认背景)
+    const bgColor = sanitizeBackgroundColor(backgroundColor);
 
     // URL 可为空: 空 URL 时跳过归一化与元数据抓取
     const hasUrl = !!url && String(url).trim();
@@ -350,6 +360,7 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
       title: effectiveTitle,
       description: effectiveDescription,
       icon: effectiveIcon,
+      backgroundColor: bgColor,
       tag: effectiveTag,
       isFavorite: false,
       isArchived: false,
@@ -406,6 +417,7 @@ export async function searchByUrl(req: AuthRequest, res: Response): Promise<void
       title: doc.title,
       description: doc.description,
       icon: doc.icon,
+      backgroundColor: doc.backgroundColor || null,
       tag: doc.tag || (doc.tags && doc.tags.length > 0 ? doc.tags[0] : "其他"),
       hasAccount: doc.hasAccount || false,
       accountCount: doc.accounts?.length || 0,
@@ -456,6 +468,10 @@ export async function update(req: AuthRequest, res: Response): Promise<void> {
     delete updates.hasAccount;
     delete updates.accounts;
     delete updates.passwordUpdatedAt;
+    // 背景色: 显式传入时校验归一, null/非法值表示清除 (恢复默认背景)
+    if ("backgroundColor" in updates) {
+      updates.backgroundColor = sanitizeBackgroundColor(updates.backgroundColor);
+    }
 
     const updated: number = await new Promise((resolve, reject) => {
       db.links.update(
@@ -544,7 +560,7 @@ export async function batchRemove(req: AuthRequest, res: Response): Promise<void
 
 export async function batchImport(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { links: importLinks, customIcons: importIcons, tags: importTags } = req.body;
+    const { links: importLinks, customIcons: importIcons, tags: importTags, linkColors: importColors } = req.body;
     if (!Array.isArray(importLinks) || importLinks.length === 0) {
       res.status(400).json({ success: false, error: "Links array is required" });
       return;
@@ -612,7 +628,43 @@ export async function batchImport(req: AuthRequest, res: Response): Promise<void
       }
     }
 
-    // 导入链接 (包含 icon 字段)
+    // 导入预设背景色 (按色值去重, 已存在则跳过)
+    let colorCount = 0;
+    if (Array.isArray(importColors) && importColors.length > 0) {
+      const existingColors: any[] = await new Promise((resolve, reject) => {
+        db.presetColors.find({ userId: req.userId }).exec((err, docs) => {
+          if (err) reject(err);
+          else resolve(docs as any[]);
+        });
+      });
+      const existingValues = new Set(existingColors.map((c) => c.color));
+      // 请求内也去重 (同一文件可能含重复色值)
+      const seen = new Set<string>();
+      const newColors = importColors
+        .map((c: any) => normalizeColor(c?.color))
+        .filter((c: string | null): c is string => {
+          if (!c || existingValues.has(c) || seen.has(c)) return false;
+          seen.add(c);
+          return true;
+        })
+        .map((c: string) => ({
+          _id: uuidv4(),
+          userId: req.userId,
+          color: c,
+          createdAt: now,
+        }));
+      if (newColors.length > 0) {
+        await new Promise<void>((resolve, reject) => {
+          db.presetColors.insert(newColors, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+        colorCount = newColors.length;
+      }
+    }
+
+    // 导入链接 (包含 icon/backgroundColor 字段)
     const docs = importLinks.map((item: any) => ({
       _id: uuidv4(),
       userId: req.userId,
@@ -620,6 +672,7 @@ export async function batchImport(req: AuthRequest, res: Response): Promise<void
       title: item.title || item.url || "",
       description: item.description,
       icon: item.icon || undefined,
+      backgroundColor: sanitizeBackgroundColor(item.backgroundColor),
       tag: item.tag || (Array.isArray(item.tags) && item.tags.length > 0 ? item.tags[0] : "其他"),
       isFavorite: item.isFavorite || false,
       isArchived: item.isArchived || false,
@@ -640,7 +693,8 @@ export async function batchImport(req: AuthRequest, res: Response): Promise<void
     const parts = [`${inserted} 条链接`];
     if (iconCount > 0) parts.push(`${iconCount} 个图标`);
     if (tagCount > 0) parts.push(`${tagCount} 个标签`);
-    res.status(201).json({ success: true, message: `已导入 ${parts.join("、")}`, data: { count: inserted, iconCount, tagCount } });
+    if (colorCount > 0) parts.push(`${colorCount} 个预设背景色`);
+    res.status(201).json({ success: true, message: `已导入 ${parts.join("、")}`, data: { count: inserted, iconCount, tagCount, colorCount } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -657,16 +711,16 @@ export async function exportLinks(req: AuthRequest, res: Response): Promise<void
     });
 
     if (format === "csv") {
-      const header = "URL,Title,Description,Tag,Icon\n";
+      const header = "URL,Title,Description,Tag,Icon,BackgroundColor\n";
       const rows = links
-        .map((l) => `"${l.url}","${l.title}","${l.description || ""}","${l.tag || (l.tags && l.tags.length > 0 ? l.tags[0] : "其他")}","${l.icon || ""}"`)
+        .map((l) => `"${l.url}","${l.title}","${l.description || ""}","${l.tag || (l.tags && l.tags.length > 0 ? l.tags[0] : "其他")}","${l.icon || ""}","${l.backgroundColor || ""}"`)
         .join("\n");
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=links.csv");
       res.send(header + rows);
     } else {
-      // JSON 导出: 包含链接、标签、自定义图标
-      const [customIcons, tags] = await Promise.all([
+      // JSON 导出: 包含链接、标签、自定义图标与预设背景色
+      const [customIcons, tags, presetColors] = await Promise.all([
         new Promise<any[]>((resolve, reject) => {
           db.customIcons.find({ userId: req.userId }).sort({ createdAt: -1 }).exec((err, docs) => {
             if (err) reject(err);
@@ -679,6 +733,12 @@ export async function exportLinks(req: AuthRequest, res: Response): Promise<void
             else resolve(docs as any[]);
           });
         }),
+        new Promise<any[]>((resolve, reject) => {
+          db.presetColors.find({ userId: req.userId }).sort({ createdAt: 1 }).exec((err, docs) => {
+            if (err) reject(err);
+            else resolve(docs as any[]);
+          });
+        }),
       ]);
       // 链接数据去掉 userId 与 accounts (账号单独管理, 不随导出)
       const safeLinks = links.map((l) => ({
@@ -686,6 +746,7 @@ export async function exportLinks(req: AuthRequest, res: Response): Promise<void
         title: l.title,
         description: l.description,
         icon: l.icon,
+        backgroundColor: l.backgroundColor || undefined,
         tag: l.tag || (l.tags && l.tags.length > 0 ? l.tags[0] : "其他"),
         isFavorite: l.isFavorite,
         isArchived: l.isArchived,
@@ -693,10 +754,11 @@ export async function exportLinks(req: AuthRequest, res: Response): Promise<void
         createdAt: l.createdAt,
         updatedAt: l.updatedAt,
       }));
-      // 图标/标签去 userId
+      // 图标/标签/预设色去 userId
       const safeIcons = customIcons.map((c) => ({ url: c.url, label: c.label, createdAt: c.createdAt }));
       const safeTags = tags.map((t) => ({ name: t.name, color: t.color, createdAt: t.createdAt }));
-      res.json({ success: true, data: safeLinks, customIcons: safeIcons, tags: safeTags });
+      const safeColors = presetColors.map((c) => ({ color: c.color, createdAt: c.createdAt }));
+      res.json({ success: true, data: safeLinks, customIcons: safeIcons, tags: safeTags, linkColors: safeColors });
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

@@ -17,6 +17,7 @@ export interface Link {
   description?: string;
   icon?: string;
   screenshot?: string;
+  backgroundColor?: string | null; // 卡片背景色 (#RGB/#RGBA/#RRGGBB/#RRGGBBAA), null/缺省为默认背景
   tag?: string;            // 单个标签名 (新字段)
   tags?: string[];         // 旧字段, 兼容已有数据
   isFavorite: boolean;

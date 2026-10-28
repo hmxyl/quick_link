@@ -17,6 +17,7 @@ const attachments = new Datastore({ filename: path.join(env.DATA_DIR, "attachmen
 const noteOrders = new Datastore({ filename: path.join(env.DATA_DIR, "note_orders.db"), autoload: true });
 const migrations = new Datastore({ filename: path.join(env.DATA_DIR, "migrations.db"), autoload: true });
 const customIcons = new Datastore({ filename: path.join(env.DATA_DIR, "custom_icons.db"), autoload: true });
+const presetColors = new Datastore({ filename: path.join(env.DATA_DIR, "preset_colors.db"), autoload: true });
 const apiEnvironments = new Datastore({ filename: path.join(env.DATA_DIR, "api_environments.db"), autoload: true });
 const apiCollections = new Datastore({ filename: path.join(env.DATA_DIR, "api_collections.db"), autoload: true });
 const apiHistory = new Datastore({ filename: path.join(env.DATA_DIR, "api_history.db"), autoload: true });
@@ -44,6 +45,10 @@ noteOrders.ensureIndex({ fieldName: "parentId" });
 customIcons.ensureIndex({ fieldName: "userId" });
 customIcons.ensureIndex({ fieldName: "url", unique: true });
 
+// 预设背景色: 每用户独立列表, 按 userId 查询;
+// 不建 color 全局唯一索引 (色值跨用户相同是常态), 重复由控制器按 {userId, color} 判定
+presetColors.ensureIndex({ fieldName: "userId" });
+
 apiEnvironments.ensureIndex({ fieldName: "userId" });
 
 apiCollections.ensureIndex({ fieldName: "userId" });
@@ -51,5 +56,5 @@ apiCollections.ensureIndex({ fieldName: "parentId" });
 
 apiHistory.ensureIndex({ fieldName: "userId" });
 
-export const db = { users, links, accounts, tags, attachments, noteOrders, migrations, customIcons, apiEnvironments, apiCollections, apiHistory };
+export const db = { users, links, accounts, tags, attachments, noteOrders, migrations, customIcons, presetColors, apiEnvironments, apiCollections, apiHistory };
 export type DB = typeof db;

@@ -8,7 +8,9 @@
 ;   - 不再安装 Electron 外壳, 改为 node.exe + 服务端 + 前端静态文件, 由 NSSM 托管为服务
 ;   - 配置与密钥从 %APPDATA%\QuickLink 迁到 %ProgramData%\QuickLink:
 ;     服务以 LocalSystem 运行, 其 %APPDATA% 指向 C:\Windows\System32\config\systemprofile, 读不到用户目录
-;   - 访问方式改为浏览器打开 http://localhost:3000 (开始菜单/桌面放 .url 快捷方式)
+;   - 访问方式改为浏览器打开 http://localhost:端口 (开始菜单/桌面放 .url 快捷方式)。
+;     端口在安装向导中可自定义 (默认 3000), 选择写入 %ProgramData%\QuickLink\port.txt,
+;     service.js 启动时读取; 升级安装预填上次的选择。
 
 Unicode true
 
@@ -29,7 +31,10 @@ Unicode true
 
 !define PRODUCT_NAME "QuickLink"
 !define SERVICE_NAME "QuickLink"
+; 默认端口。实际端口是安装向导的运行时选择 ($PortValue, 见数据目录页), 覆盖安装预填上次选择
 !define APP_PORT     "3000"
+; 仅用于让 MUI 完成页创建复选框 (值本身不会被执行, 见 MUI_FINISHPAGE_RUN_FUNCTION 说明);
+; 实际打开的地址是运行时变量 $AppUrl (http://localhost:$PortValue)
 !define APP_URL      "http://localhost:${APP_PORT}"
 !define UNINST_KEY   "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 
@@ -58,6 +63,8 @@ ShowUnInstDetails show
 Var ConfigDir
 Var DataDirValue        ; 向导中最终选择的数据目录
 Var MigrationSource     ; 需要迁移数据的旧目录 (与 DataDirValue 不同时写入 pending_migration.txt)
+Var PortValue           ; 向导中最终选择的服务端口 (1~65535)
+Var AppUrl              ; http://localhost:$PortValue, 安装段拼装后供各处使用
 Var NssmPath
 Var ExecOutput
 ; ReadDirPointer 的出入参 (用独立变量而非 $R 寄存器, 避免与页面函数互相覆盖)
@@ -66,8 +73,9 @@ Var PtrResult
 Var PtrByte
 Var PtrChar
 Var PtrHandle
-; 数据目录页控件句柄 (必须跨 Create/Leave 存活)
+; 自定义页控件句柄 (必须跨 Create/Leave 存活)
 Var HwndDirText
+Var HwndPortText
 
 ; ======================================================================
 ; 页面
@@ -218,23 +226,62 @@ Function ResolveInitialDataDir
   StrCpy $DataDirValue "$ConfigDir\data"
 FunctionEnd
 
+; 决定服务端口的初始值: 上次安装写入的 port.txt, 否则默认 3000。
+; port.txt 只含 ASCII 数字 (安装器用 FileWrite 单字节写入), 直接 FileRead 读回,
+; 逐字符过滤数字防御历史误写 (与 ReadDirPointer 的 UTF-16LE 路径场景不同, 无需 BOM 处理)。
+Function ResolveInitialPort
+  StrCpy $PortValue "${APP_PORT}"
+  ${IfNot} ${FileExists} "$ConfigDir\port.txt"
+    Return
+  ${EndIf}
+
+  FileOpen $0 "$ConfigDir\port.txt" r
+  FileRead $0 $1
+  FileClose $0
+  StrCpy $1 $1 5    ; 端口最长 5 位
+  StrCpy $2 ""
+  StrCpy $3 0
+  ripLoop:
+    StrCpy $4 $1 1 $3
+    ${If} $4 == ""
+      Goto ripDone
+    ${EndIf}
+    ${If} $4 S>= "0"
+    ${AndIf} $4 S<= "9"
+      StrCpy $2 "$2$4"
+      IntOp $3 $3 + 1
+      Goto ripLoop
+    ${EndIf}
+  ripDone:
+  ${If} $2 != ""
+    StrCpy $PortValue $2
+  ${EndIf}
+FunctionEnd
+
 Function DataDirPageCreate
   Call ResolveInitialDataDir
+  Call ResolveInitialPort
 
-  !insertmacro MUI_HEADER_TEXT "选择用户数据目录" "笔记、附件与账号数据的存放位置"
+  !insertmacro MUI_HEADER_TEXT "选择用户数据目录与服务端口" "数据存放位置与浏览器访问端口"
   nsDialogs::Create 1018
   Pop $0
   ${If} $0 == error
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 0 100% 46u "${PRODUCT_NAME} 将安装为 Windows 服务并开机自动启动，通过浏览器访问 ${APP_URL}。$\r$\n$\r$\n笔记、附件、链接与账号密码将存放在以下目录，卸载软件时该目录中的数据不会被删除。"
+  ${NSD_CreateLabel} 0 0 100% 44u "${PRODUCT_NAME} 将安装为 Windows 服务并开机自动启动，通过浏览器访问。$\r$\n$\r$\n笔记、附件、链接与账号密码将存放在以下目录，卸载软件时该目录中的数据不会被删除。"
   Pop $0
-  ${NSD_CreateText} 0 50u 84% 13u "$DataDirValue"
+  ${NSD_CreateLabel} 0 48u 100% 10u "用户数据目录:"
+  Pop $0
+  ${NSD_CreateText} 0 60u 84% 13u "$DataDirValue"
   Pop $HwndDirText
-  ${NSD_CreateBrowseButton} 86% 49u 14% 14u "浏览…"
+  ${NSD_CreateBrowseButton} 86% 59u 14% 14u "浏览…"
   Pop $0
   ${NSD_OnClick} $0 DataDirBrowse
+  ${NSD_CreateLabel} 0 84u 100% 10u "服务端口 (浏览器访问 http://localhost:端口；与其他程序冲突时可修改):"
+  Pop $0
+  ${NSD_CreateNumber} 0 96u 22% 13u "$PortValue"
+  Pop $HwndPortText
 
   nsDialogs::Show
 FunctionEnd
@@ -268,10 +315,38 @@ Function DataDirPageLeave
       StrCpy $DataDirValue $DataDirValue -1
     ${EndIf}
   ${EndIf}
+
+  ; ---- 端口校验 ----
+  ; NSD_CreateNumber 控件 (ES_NUMBER) 已挡掉非数字输入, 这里补长度与数值范围
+  ${NSD_GetText} $HwndPortText $PortValue
+  StrLen $0 $PortValue
+  ${If} $0 == 0
+  ${OrIf} $0 > 5
+    MessageBox MB_OK|MB_ICONEXCLAMATION "端口必须为 1~65535 之间的数字"
+    Abort
+  ${EndIf}
+  ${If} $PortValue < 1
+  ${OrIf} $PortValue > 65535
+    MessageBox MB_OK|MB_ICONEXCLAMATION "端口必须为 1~65535 之间的数字"
+    Abort
+  ${EndIf}
+  ; 软性占用检查: netstat 查该端口是否有 LISTENING (查不到/命令失败则跳过, 不阻断安装)。
+  ; 端口被占用是服务"注册成功但起不来"的最常见原因, 装前提示优于装后排查。
+  ; 注意管道符直接写 | : 命令本身经由 cmd.exe /c 执行, cmd 原生处理管道;
+  ; 写成 ^| 反而会被 cmd 当成转义 (字面量 | 传给 netstat 报用法错误, 检查静默失效)。
+  nsExec::ExecToStack '"$SYSDIR\cmd.exe" /c netstat -an | findstr /C:":$PortValue " | findstr /C:"LISTENING"'
+  Pop $0
+  Pop $1
+  ${If} $0 == 0
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "端口 $PortValue 当前似乎已被其他程序占用。$\r$\n$\r$\n仍要使用该端口吗？" IDYES portKeep
+    Abort
+    portKeep:
+  ${EndIf}
 FunctionEnd
 
 Function OpenInBrowser
-  ExecShell "open" "${APP_URL}"
+  ; $AppUrl 由安装段按向导选择的端口拼装 (http://localhost:$PortValue)
+  ExecShell "open" "$AppUrl"
 FunctionEnd
 
 ; 停止并移除已有服务。必须在复制文件之前完成: 运行中的 node.exe 会锁住 node.exe 自身与 .db 文件,
@@ -305,7 +380,7 @@ Function InstallService
   ; MODULE_NOT_FOUND -> 进程秒退 -> NSSM 按 AppExit 反复重启, 服务状态显示 PAUSED。
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} AppParameters "\$\"$INSTDIR\server\service.js\$\""'
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} DisplayName "${PRODUCT_NAME}"'
-  nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} Description "QuickLink 链接与笔记收藏服务, 浏览器访问 ${APP_URL}"'
+  nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} Description "QuickLink 链接与笔记收藏服务, 浏览器访问 $AppUrl"'
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} AppDirectory "$INSTDIR\server"'
   ; 开机自动启动 (服务在任何用户登录之前就已就绪)
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} Start SERVICE_AUTO_START'
@@ -319,7 +394,7 @@ Function InstallService
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} AppRotateBytes 10485760'
 
   ; 异常退出 5 秒后重启; AppThrottle 让"启动即崩溃"被判定为失败, 而不是无限快速重启
-  ; (端口 ${APP_PORT} 被占用是最常见的崩溃原因)
+  ; (所选端口被占用是最常见的崩溃原因)
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} AppExit Default Restart'
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} AppRestartDelay 5000'
   nsExec::ExecToLog '"$NssmPath" set ${SERVICE_NAME} AppThrottle 10000'
@@ -328,16 +403,16 @@ Function InstallService
 FunctionEnd
 
 ; 启动后确认真的能提供服务。用 HTTP 探测而不是 SCM 服务状态:
-; 服务可能显示 RUNNING 而 Express 已经崩在 listen 上 (端口 ${APP_PORT} 被占用时就是如此),
+; 服务可能显示 RUNNING 而 Express 已经崩在 listen 上 (所选端口被占用时就是如此),
 ; NSSM 会按 AppExit 策略不停重启, 界面上看着"正常"实则完全不可用。
 Function VerifyServiceRunning
   ; 服务端启动要跑数据库迁移, 留出时间
   Sleep 4000
-  nsExec::ExecToStack '"$INSTDIR\node\node.exe" "$INSTDIR\server\check-health.js" ${APP_PORT}'
+  nsExec::ExecToStack '"$INSTDIR\node\node.exe" "$INSTDIR\server\check-health.js" $PortValue'
   Pop $0
   Pop $ExecOutput
   ${If} $0 != "0"
-    MessageBox MB_OK|MB_ICONEXCLAMATION "QuickLink 服务已安装，但当前无法访问 ${APP_URL}。$\r$\n$\r$\n最常见的原因是端口 ${APP_PORT} 已被其他程序占用。$\r$\n$\r$\n详细日志: $ConfigDir\logs\service.err.log$\r$\n$\r$\n排查后可在开始菜单运行「QuickLink Service Control」重启服务。"
+    MessageBox MB_OK|MB_ICONEXCLAMATION "QuickLink 服务已安装，但当前无法访问 $AppUrl。$\r$\n$\r$\n最常见的原因是端口 $PortValue 已被其他程序占用。$\r$\n$\r$\n详细日志: $ConfigDir\logs\service.err.log$\r$\n$\r$\n排查后可在开始菜单运行「QuickLink Service Control」重启服务。"
   ${EndIf}
 FunctionEnd
 
@@ -348,7 +423,7 @@ Function CreateShortcuts
   ; (内容全为 ASCII; IconFile 路径按 ANSI 写入, 正好是 Windows 解析 .url 时期望的编码)
   FileOpen $0 "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.url" w
   FileWrite $0 "[InternetShortcut]$\r$\n"
-  FileWrite $0 "URL=${APP_URL}$\r$\n"
+  FileWrite $0 "URL=$AppUrl$\r$\n"
   FileWrite $0 "IconFile=$INSTDIR\icon.ico$\r$\n"
   FileWrite $0 "IconIndex=0$\r$\n"
   FileClose $0
@@ -358,7 +433,7 @@ Function CreateShortcuts
 
   FileOpen $0 "$DESKTOP\${PRODUCT_NAME}.url" w
   FileWrite $0 "[InternetShortcut]$\r$\n"
-  FileWrite $0 "URL=${APP_URL}$\r$\n"
+  FileWrite $0 "URL=$AppUrl$\r$\n"
   FileWrite $0 "IconFile=$INSTDIR\icon.ico$\r$\n"
   FileWrite $0 "IconIndex=0$\r$\n"
   FileClose $0
@@ -376,6 +451,11 @@ Section "Install" SecInstall
   ${If} $DataDirValue == ""
     Call ResolveInitialDataDir
   ${EndIf}
+  ; 端口同理: 静默安装预填上次选择 (无则默认 3000), 并拼装访问地址
+  ${If} $PortValue == ""
+    Call ResolveInitialPort
+  ${EndIf}
+  StrCpy $AppUrl "http://localhost:$PortValue"
 
   Call StopAndRemoveService
 
@@ -401,6 +481,17 @@ Section "Install" SecInstall
   FileWriteUTF16LE $0 "$DataDirValue"
   FileClose $0
 
+  ; 写入本次选择的服务端口。纯 ASCII 数字, 用 FileWrite 单字节写入即可 (路径才需要 UTF-16LE);
+  ; service.js 按 QUICKLINK_PORT 环境变量 > port.txt > config.json 优先级读取,
+  ; quicklink-ctl.cmd 与下次升级安装也从这里读回。写 $INSTDIR\port.txt 一份供 ctl 兜底
+  ; (ProgramData 丢失时按安装目录回退)。
+  FileOpen $0 "$ConfigDir\port.txt" w
+  FileWrite $0 "$PortValue"
+  FileClose $0
+  FileOpen $0 "$INSTDIR\port.txt" w
+  FileWrite $0 "$PortValue"
+  FileClose $0
+
   ; 数据目录发生变化时提示服务首次启动迁移 (仅复制不删除; 目标非空则丢弃提示, 判定在 service.js)
   ${If} $MigrationSource != ""
   ${AndIf} $MigrationSource != $DataDirValue
@@ -418,7 +509,7 @@ Section "Install" SecInstall
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion"  "${VERSION}"
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayIcon"     "$INSTDIR\icon.ico"
   WriteRegStr HKLM "${UNINST_KEY}" "Publisher"       "QuickLink"
-  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout"    "${APP_URL}"
+  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout"    "$AppUrl"
   WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall ${PRODUCT_NAME}.exe"'
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1

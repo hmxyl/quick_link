@@ -12,6 +12,7 @@ import linkRoutes from "./modules/links/routes";
 import accountRoutes from "./modules/links/accounts.routes";
 import tagRoutes from "./modules/links/tags.routes";
 import customIconRoutes from "./modules/links/customIcons.routes";
+import presetColorRoutes from "./modules/links/presetColors.routes";
 import noteRoutes from "./modules/notes/routes";
 import apiRoutes from "./modules/api/routes";
 
@@ -52,6 +53,7 @@ app.use("/api/links", linkRoutes);
 app.use("/api/accounts", accountRoutes);
 app.use("/api/tags", tagRoutes);
 app.use("/api/custom-icons", customIconRoutes);
+app.use("/api/preset-colors", presetColorRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/api-manager", apiRoutes);
 

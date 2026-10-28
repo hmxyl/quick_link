@@ -11,6 +11,7 @@ export interface Link {
   title: string;
   description?: string;
   icon?: string;
+  backgroundColor?: string | null; // 卡片背景色 (十六进制色值), null/缺省为默认背景
   tag?: string;          // 单个标签名 (新字段)
   tags?: string[];       // 旧字段, 兼容已有数据
   isFavorite: boolean;
@@ -42,6 +43,13 @@ export interface Tag {
   color?: string;
   columns?: number;    // 每行展示链接数, 默认 5
   sortOrder?: number;  // 标签排序值, 越小越靠前
+  createdAt: string;
+}
+
+// 预设背景色 (用户在「背景色管理」维护的色板)
+export interface PresetColor {
+  _id: string;
+  color: string; // 十六进制色值 (小写)
   createdAt: string;
 }
 
@@ -100,6 +108,7 @@ export interface CreateLinkRequest {
   title?: string;
   description?: string;
   icon?: string;
+  backgroundColor?: string | null; // 卡片背景色, null 清除
   tag?: string;        // 单个标签名
   tags?: string[];     // 兼容旧接口
   accounts?: LinkAccountInput[];

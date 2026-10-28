@@ -127,7 +127,13 @@ const App: React.FC = () => {
       locale={zhCN}
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: { colorPrimary: "#1677ff", ...(fontFamily ? { fontFamily: `${fontFamily}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` } : {}) },
+        token: {
+          colorPrimary: "#1677ff",
+          // 全局圆角: 控件 8px / 容器 12px, 视觉更柔和统一 (Swiss/极简方向)
+          borderRadius: 8,
+          borderRadiusLG: 12,
+          ...(fontFamily ? { fontFamily: `${fontFamily}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` } : {}),
+        },
       }}
     >
       {!ready ? (

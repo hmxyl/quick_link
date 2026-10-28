@@ -7,9 +7,11 @@
 // 与登录用户的目录无关, 且服务在任何人登录之前就已启动。
 //
 // 配置来源分工 (两套写入方各自的编码能力不同, 不要混用):
-//   data_dir.txt / pending_migration.txt / jwt_secret.txt
+//   data_dir.txt / pending_migration.txt / jwt_secret.txt / port.txt
 //       由 NSIS 安装器写入。Unicode 安装器中 FileWrite 输出 ANSI 单字节, 中文路径会损坏,
-//       因此安装器一律用 FileWriteUTF16LE, 本文件按 UTF-16LE 解码 (兼容历史上的错误编码)。
+//       因此指针文件一律用 FileWriteUTF16LE, 本文件按 UTF-16LE 解码 (兼容历史上的错误编码);
+//       唯一例外是 port.txt —— 内容是纯 ASCII 数字, 安装器用 FileWrite 单字节写入, 本文件按 UTF-8 读回即可
+//       (decodeText 对无 NUL 字节的内容自动走 UTF-8 分支, 两种写法都能正确解出端口)。
 //   config.json
 //       由本文件独占读写 (UTF-8), 存放 port / host / jwtSecret。安装器不直接改写它,
 //       避免 NSIS 写 JSON 时的编码与转义问题; 安装器要传值就写上面的 txt 文件。
@@ -137,6 +139,25 @@ function resolveJwtSecret(config) {
   return crypto.randomBytes(32).toString("hex");
 }
 
+// ---- 端口 ----
+// 优先级: QUICKLINK_PORT 环境变量 (管理员经 nssm AppEnvironmentExtra 手动覆盖, 最高优先)
+//   > 安装器写入的 port.txt (用户在安装向导中的选择, 每次安装都会重写, 必须压过历史值,
+//     否则"重装换端口"不会生效) > config.json (上次启动持久化的端口) > 默认 3000。
+// 非法值 (非数字 / 越界) 一律跳过取下一来源, 避免一条脏配置让服务起不来。
+function sanitizePort(v) {
+  const n = parseInt(v, 10);
+  return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : 0;
+}
+
+function resolvePort(config) {
+  return (
+    sanitizePort(process.env.QUICKLINK_PORT) ||
+    sanitizePort(readPointerFile("port.txt")) ||
+    sanitizePort(config.port) ||
+    DEFAULT_PORT
+  );
+}
+
 function main() {
   fs.mkdirSync(configDir, { recursive: true });
   fs.mkdirSync(dataDir, { recursive: true });
@@ -145,7 +166,7 @@ function main() {
   const config = readConfig();
   const jwtSecret = resolveJwtSecret(config);
   const host = process.env.QUICKLINK_HOST || config.host || DEFAULT_HOST;
-  const port = parseInt(process.env.QUICKLINK_PORT || config.port || DEFAULT_PORT, 10);
+  const port = resolvePort(config);
 
   const next = { ...config, host, port, jwtSecret };
   if (JSON.stringify(next) !== JSON.stringify(config)) writeConfig(next);

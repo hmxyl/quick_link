@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import SettingsModal from "../modules/user/SettingsModal";
+import { BrandMark } from "../modules/user/LoginPage";
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -55,10 +56,22 @@ const AppLayout: React.FC = () => {
         collapsedWidth={60}
         style={{ position: "relative" }}
       >
-        <div style={{ padding: "16px", textAlign: "center" }}>
-          <Text strong style={{ color: "#fff", fontSize: 18 }}>
-            {collapsed ? "QL" : "QuickLink"}
-          </Text>
+        {/* 品牌区: 与登录页共用 BrandMark 视觉 */}
+        <div
+          style={{
+            padding: collapsed ? "16px 0" : "16px 16px 8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+          }}
+        >
+          <BrandMark size={collapsed ? 32 : 30} />
+          {!collapsed && (
+            <Text strong style={{ color: "#fff", fontSize: 16, letterSpacing: 0.5 }}>
+              QuickLink
+            </Text>
+          )}
         </div>
         <Menu
           theme="dark"
@@ -97,7 +110,16 @@ const AppLayout: React.FC = () => {
         </div>
       </Sider>
       <Layout>
-        <Content style={{ margin: 24, padding: 24, background: token.colorBgContainer, borderRadius: 8, minHeight: 360 }}>
+        <Content
+          style={{
+            margin: 16,
+            padding: 24,
+            background: token.colorBgContainer,
+            borderRadius: token.borderRadiusLG,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            minHeight: 360,
+          }}
+        >
           <Outlet />
         </Content>
       </Layout>

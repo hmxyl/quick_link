@@ -53,11 +53,12 @@
 
 ## 5. 前端交互
 
-- **登录页**：用户名+密码，提供记住密码/自动登录勾选与「忘记密码」（凭用户名+注册邮箱重置）。
-- **注册页**：用户名/邮箱/登录密码（至少 8 位）+ 确认密码。
+- **全局视觉基线（2026-10）**：antd 主题统一 `borderRadius 8` / 容器 12；`styles/global.css` 提供细滚动条、主题切换平滑过渡与 `prefers-reduced-motion` 适配（系统关闭动效时停用全部动画）；登录页与侧栏共用 `BrandMark`（蓝青渐变圆角方块 + 链接图标）品牌标识，注册页同视觉语言；各模块面板描边/提示色一律走 antd token（深色主题正确适配，历史硬编码色已清理）；Modal 统一用 `destroyOnHidden`（`destroyOnClose` 已弃用）。
+- **登录页**：品牌标识 + 副标题（「链接 · 笔记 · 接口，一站式个人知识库」）+ 渐变背景（浅色淡蓝渐变 / 深色暗底 + 品牌色光晕），用户名+密码（带 `autocomplete` 供浏览器自动填充），提供记住密码/自动登录勾选与「忘记密码」（凭用户名+注册邮箱重置）。
+- **注册页**：与登录页同一视觉（BrandMark、渐变背景、卡片），用户名/邮箱/密码/确认密码，带 `autocomplete`（`username` / `email` / `new-password`）。
 - **记住密码/自动登录**：纯客户端能力，凭据 base64 轻度混淆存 `localStorage[quicklink:savedCredentials]`；自动登录仅启动且无 token 时静默尝试一次；与设置弹窗开关联动。
 - **设置弹窗**：首行为**账号信息**（头像 + 当前登录用户名 + 「注册邮箱：xxx」，打开弹窗时调 `GET /api/auth/me` 刷新），其后依次为外观主题（跟随系统/浅色/深色，默认跟随系统，背景色随系统深浅色自动切换）、记住密码、自动登录、全局字体（预设字体选项：IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体，亦支持自定义输入，留空使用默认字体；选中后实时生效，通过 CSS 变量 `--ql-font-family` 全局继承），末行为**退出登录**（danger 按钮 + Popconfirm 二次确认，确认后 `logout()` 清本地 token/user 并跳 `/login`，不动已保存凭据）；设置项均存 `localStorage quicklink:settings`（主题态另由 `themeStore` 响应式分发，机制见 [BUILD.md §8](./BUILD.md)）。
-- **主侧栏**：底部仅保留「设置」与「收起/展开」两个按钮；原「用户信息」下拉入口（用户名 + 退出登录）已合并进设置弹窗（2026-10）。
+- **主侧栏**：品牌区为 `BrandMark` + 名称（收起时仅留标识），底部仅保留「设置」与「收起/展开」两个按钮；原「用户信息」下拉入口（用户名 + 退出登录）已合并进设置弹窗（2026-10）。
 - **认证态**：Zustand `authStore`（`user / token / isAuthenticated / login / register / logout / autoLogin`）；请求拦截自动附加 `Authorization: Bearer`；401 自动清理并跳登录（登录/注册页豁免）。
 
 ## 6. 设计决策

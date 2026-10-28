@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { List, Button, Modal, Form, Input, InputNumber, ColorPicker, message, Popconfirm, Tag as AntTag } from "antd";
+import { List, Button, Modal, Form, Input, InputNumber, ColorPicker, message, Popconfirm, Tag as AntTag, Typography, theme } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined } from "@ant-design/icons";
 import { tagApi } from "../../services/api";
 import type { Tag } from "../../types";
+
+const { Text } = Typography;
 
 // Tag management modal (merged into link management page)
 const TagManager: React.FC<{
@@ -10,17 +12,24 @@ const TagManager: React.FC<{
   onClose: () => void;
   onChanged: () => void;
 }> = ({ open, onClose, onChanged }) => {
+  const { token } = theme.useToken();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
+  // 统一设置的每行链接数 (打开时取首个标签当前值)
+  const [uniformColumns, setUniformColumns] = useState<number | null>(5);
+  const [applying, setApplying] = useState(false);
   const [form] = Form.useForm();
 
   const loadTags = async () => {
     setLoading(true);
     try {
       const res = await tagApi.list();
-      setTags(res.data || []);
+      const list = res.data || [];
+      setTags(list);
+      // 以首个标签当前列数作为统一设置的初始值
+      setUniformColumns(list[0]?.columns ?? 5);
     } catch {
       message.error("加载标签失败");
     } finally {
@@ -71,6 +80,22 @@ const TagManager: React.FC<{
     }
   };
 
+  // 统一设置: 一次将所有标签 (含"其他"分组) 的每行链接数改为同一值
+  const handleApplyUniform = async () => {
+    if (uniformColumns == null) return;
+    setApplying(true);
+    try {
+      const res = await tagApi.batchColumns(uniformColumns);
+      message.success(res.message || `已统一为每行 ${uniformColumns} 个链接`);
+      await loadTags();
+      onChanged();
+    } catch (err: any) {
+      message.error(err.response?.data?.error || "统一设置失败");
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -106,6 +131,40 @@ const TagManager: React.FC<{
       footer={null}
       width={480}
     >
+      {/* 统一设置: 所有标签 (含"其他"分组) 一次应用同一列数 */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 16,
+          padding: "8px 12px",
+          borderRadius: 6,
+          background: token.colorFillQuaternary,
+        }}
+      >
+        <Text style={{ fontSize: 13 }}>统一每行链接数</Text>
+        <InputNumber
+          min={1}
+          max={8}
+          value={uniformColumns}
+          onChange={(v) => setUniformColumns(v == null ? null : Number(v))}
+          style={{ width: 72 }}
+          size="small"
+        />
+        <Button
+          size="small"
+          type="primary"
+          loading={applying}
+          disabled={uniformColumns == null}
+          onClick={handleApplyUniform}
+        >
+          应用到全部
+        </Button>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          覆盖各标签单独设置
+        </Text>
+      </div>
       <List
         loading={loading}
         dataSource={tags}
@@ -134,7 +193,7 @@ const TagManager: React.FC<{
             ]}
           >
             <AntTag color={tag.color || "default"}>{tag.name}</AntTag>
-            <span style={{ marginLeft: 8, fontSize: 12, color: "#999" }}>每行 {tag.columns ?? 5} 个</span>
+            <span style={{ marginLeft: 8, fontSize: 12, color: token.colorTextTertiary }}>每行 {tag.columns ?? 5} 个</span>
           </List.Item>
         )}
       />

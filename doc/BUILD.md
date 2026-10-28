@@ -16,11 +16,11 @@
 
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
-| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标与标签）、标签管理弹窗（含每行链接数配置、↑/↓ 排序，链接展示顺序与标签排序一致）、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
+| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数，标签管理可一键统一全部分组列数）、链接卡片背景色（逐链接设置/清除，可从预设色板选取或取色器自定义，预设背景色独立管理）、悬浮操作栏占位于链接信息上方（固定占位不遮挡内容）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标、标签、预设背景色与链接背景色）、标签管理弹窗（含每行链接数配置、统一设置、↑/↓ 排序，链接展示顺序与标签排序一致）、背景色管理弹窗、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
 | 笔记管理 | 文件夹树（真实文件目录树存储，展开即显示目录下全部文件与子文件夹，文件名含扩展名，非 Markdown 文件单击交系统默认程序打开；左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键复制文件路径（打开于 Typora / 资源管理器仅非服务模式可用，见 §9.5；Typora 支持自定义安装路径）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
 | 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理（键盘方向键导航）、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth，JSON 一键格式化，可编辑接口名称）、响应查看（状态码/耗时/Body/Headers，JSON 格式化/原始切换）、请求历史记录（点击恢复含响应结果）、集合导出/导入（原生格式 + Postman Collection v2.1 双向兼容）、环境 Postman 格式导入/导出、拷贝为 cURL、导入 cURL | [API.md](./API.md) |
-| Windows 服务版 | NSIS 安装包把服务端注册为 **Windows 服务**（NSSM + 随包 `node.exe`），开机自动启动，通过浏览器访问 `http://localhost:3000`；仅监听 `127.0.0.1`，不对局域网开放；开始菜单附「QuickLink Service Control」运维面板 | 本文 §9 |
+| Windows 服务版 | NSIS 安装包把服务端注册为 **Windows 服务**（NSSM + 随包 `node.exe`），开机自动启动，通过浏览器访问 `http://localhost:端口`（安装向导可选端口，默认 3000）；仅监听 `127.0.0.1`，不对局域网开放；开始菜单附「QuickLink Service Control」运维面板 | 本文 §9 |
 | 数据存储 | 零外部依赖：NeDB 嵌入式 .db 文件 + 笔记文件树，全部统一存于同一数据目录（开发态 `user_data/`；服务版安装时可指定位置，默认 `%ProgramData%\QuickLink\data`），便于整体备份/迁移 | 本文 §4 |
 | 通用体验 | 全中文界面（Ant Design zhCN）、外观主题（跟随系统/浅色/深色）、全局字体选择、侧栏收起记忆、记住密码/自动登录、开机自启（Windows 服务） | 本文 §8/§9 |
 
@@ -63,6 +63,7 @@ quick_link/
 │   │   ├── hooks/              # usePageVisibility (CachedPages 页面可见性 Context + hook)
 │   │   ├── stores/authStore.ts # Zustand 认证态; themeStore.ts # 外观主题 (跟随系统/浅/深); capabilityStore.ts # 服务端能力探测 (session 0 下隐藏桌面专属入口)
 │   │   ├── styles/markdown.css # Markdown 预览样式 + 深色模式覆盖
+│   │   ├── styles/global.css   # 全局基线: 细滚动条 / 主题切换平滑过渡 / prefers-reduced-motion 适配
 │   │   ├── types/              # 共享类型定义
 │   │   ├── App.tsx             # 路由 (BrowserRouter, zhCN) + CachedPages 页面缓存
 │   │   └── main.tsx
@@ -117,7 +118,7 @@ quick_link/
 <数据目录>/               # 开发态 user_data/; 服务版默认 %ProgramData%\QuickLink\data
 ├── note/<userId>/      # 文件夹=目录, 文档=.md (UTF-8), 其他文件原样纳管 (二进制安全), 回收站=根下隐藏目录 .trash/
 ├── attachment/         # 附件文件体 (uuid + 原扩展名)
-├── users.db  links.db  accounts.db  tags.db  attachments.db  note_orders.db  custom_icons.db  api_environments.db  api_collections.db  api_history.db  migrations.db
+├── users.db  links.db  accounts.db  tags.db  attachments.db  note_orders.db  custom_icons.db  preset_colors.db  api_environments.db  api_collections.db  api_history.db  migrations.db
 ```
 
 ### 4.2 集合与归属模块
@@ -128,6 +129,7 @@ quick_link/
 | links / tags / accounts（兼容保留） | 链接管理 | [LINKS.md §2](./LINKS.md) |
 | attachments / note_orders | 笔记管理 | [NOTES.md §2](./NOTES.md) |
 | custom_icons | 链接管理（自定义图标库） | [LINKS.md §3.2.1](./LINKS.md) |
+| preset_colors | 链接管理（预设背景色） | [LINKS.md §3.2.2](./LINKS.md) |
 | api_environments / api_collections / api_history | 接口管理 | [API.md §2](./API.md) |
 | migrations | 通用（自动管理）：`{ _id, version, name, appliedAt }` | 本文 §5 |
 
@@ -188,7 +190,7 @@ npm run migrate:status    # 查看状态
 | 前缀 | 模块 | 明细 |
 | ---- | ---- | ---- |
 | /api/auth | 用户信息管理 | [USER.md §4](./USER.md) |
-| /api/links、/api/tags、/api/accounts（兼容保留）、/api/custom-icons | 链接管理 | [LINKS.md §3](./LINKS.md) |
+| /api/links、/api/tags、/api/accounts（兼容保留）、/api/custom-icons、/api/preset-colors | 链接管理 | [LINKS.md §3](./LINKS.md) |
 | /api/notes（含 /attachments） | 笔记管理 | [NOTES.md §3](./NOTES.md) |
 | /api/api-manager | 接口管理（环境/集合/历史/代理发送） | [API.md §3](./API.md) |
 | /api/health | 通用健康检查 + 服务端能力上报（`capabilities.launchNativeGui`，见 §9.5） | — |
@@ -225,6 +227,7 @@ npm run migrate:status    # 查看状态
 ### 8.2 布局与通用
 
 - 侧栏底部依次为：设置按钮、收起/展开按钮（`localStorage quicklink:siderCollapsed` 记忆）；账号信息（用户名/注册邮箱）与退出登录均位于设置弹窗内（见 [USER.md §5](./USER.md)）。
+- 全局视觉基线（2026-10 整体优化）：antd token 统一 `borderRadius 8` / 容器 `borderRadiusLG 12`；`styles/global.css`（main.tsx 引入）提供细滚动条、主题切换平滑过渡与 `prefers-reduced-motion` 适配；`BrandMark`（蓝青渐变圆角方块 + 链接图标）作为登录/注册页与侧栏共用的品牌标识（设置弹窗头像同渐变）；内容卡片为 12px 圆角 + 1px `colorBorderSecondary` 描边；登录/注册页为渐变背景（深色主题为暗底 + 品牌色光晕）；笔记/接口等模块面板描边与提示色全部 token 化（修复深色主题下硬编码 `#f0f0f0`/`#888` 发亮的问题）；Modal 统一 `destroyOnHidden`。各页面细节见对应模块文档（链接页见 [LINKS.md §5](./LINKS.md)）。
 - 外观主题：设置弹窗选 跟随系统/浅色/深色（默认跟随系统，`prefers-color-scheme` 变化实时切换）；App 据 `isDark` 切换 antd `darkAlgorithm` 并同步 `html[data-theme]`/`color-scheme`/body 背景；自定义样式（markdown 预览、Milkdown Crepe 变量）经 `html[data-theme="dark"]` 覆盖；业务组件一律用 `theme.useToken()` 取色，禁写死浅色值。
 - 全局字体：设置弹窗可选预设字体（IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体）或自定义输入；选中后写入 `AppSettings.fontFamily`（`localStorage quicklink:settings`），App 将其应用到 `document.body.style.fontFamily`、antd `ConfigProvider` token 及 CSS 变量 `--ql-font-family`（供子组件如接口管理代码区继承）；设置页修改后通过自定义事件 `quicklink:settings-changed` 在同标签页内实时同步，无需刷新。
 - 请求拦截：自动附加 `Authorization: Bearer`；开发环境 Vite proxy `/api` → `localhost:3000`；服务端错误文案统一简体中文。
@@ -250,7 +253,7 @@ Zustand `themeStore`：`mode (system|light|dark) / isDark / setMode`；持久化
 
 ## 9. Windows 服务版
 
-> 2026-10 起移除 Electron 桌面壳：安装包把服务端注册为 **Windows 服务**并开机自动启动，日常通过浏览器访问 `http://localhost:3000`。安装包体积从约 79MB 降到约 24MB。
+> 2026-10 起移除 Electron 桌面壳：安装包把服务端注册为 **Windows 服务**并开机自动启动，日常通过浏览器访问 `http://localhost:端口`（端口在安装向导中可自定义，默认 3000）。安装包体积从约 79MB 降到约 24MB。
 
 ### 9.1 运行时结构
 
@@ -261,10 +264,10 @@ Windows SCM (服务控制管理器)
         ├── 读取机器级配置 %ProgramData%\QuickLink\
         ├── 注入环境变量后 require dist/app.js
         │     DATA_DIR=<用户数据目录>   STATIC_DIR=<安装目录>\public
-        │     NODE_ENV=production       HOST=127.0.0.1  PORT=3000
+        │     NODE_ENV=production       HOST=127.0.0.1  PORT=<安装时所选端口, 默认 3000>
         │     JWT_SECRET=<持久化密钥>   QUICKLINK_SERVICE_MODE=1
-        └── Express 监听 127.0.0.1:3000 (静态 SPA + REST API)
-浏览器 → http://localhost:3000
+        └── Express 监听 127.0.0.1:<端口> (静态 SPA + REST API)
+浏览器 → http://localhost:<端口>
 ```
 
 为什么状态放在 `%ProgramData%\QuickLink` 而不是 `%APPDATA%\QuickLink`：服务以 **LocalSystem** 账户运行，其 `%APPDATA%` 解析到 `C:\Windows\System32\config\systemprofile\AppData\Roaming`，与登录用户无关；且服务在任何用户登录之前就已启动。`%ProgramData%\QuickLink` 内容：
@@ -274,11 +277,12 @@ Windows SCM (服务控制管理器)
 | `data_dir.txt` | 安装器 / UTF-16LE | 用户数据目录（安装向导选择的绝对路径） |
 | `pending_migration.txt` | 安装器 / UTF-16LE | 换目录时待迁移的旧目录；服务首次启动消费后删除 |
 | `jwt_secret.txt` | 安装器 / UTF-8 | 交接旧版 `%APPDATA%\QuickLink\secrets.json` 里的密钥；消费后删除 |
+| `port.txt` | 安装器 / ASCII | 安装向导选择的服务端口（纯数字）；`service.js` 启动时读取，升级安装预填、`quicklink-ctl.cmd` 打开浏览器也用它 |
 | `config.json` | service.js / UTF-8 | `host` / `port` / `jwtSecret`，服务重启后沿用 |
 | `logs\service.out.log` / `logs\service.err.log` | NSSM 重定向 | stdout / stderr，单文件超 10MB 在线轮转 |
 | `data\` | 服务端 | 默认数据目录（安装时未另选位置） |
 
-编码分工是硬约束：Unicode 安装器中 `FileWrite` 输出 ANSI 单字节，中文路径会损坏，因此安装器一律用 `FileWriteUTF16LE` 写 `.txt` 指针文件、**从不写 JSON**；`config.json` 由 `service.js` 独占读写（UTF-8）。`service.js` 的 `decodeText()` 兼容 UTF-16LE、早期误写的 "FF FE + 单字节 ANSI" 与纯 UTF-8 三种形态。
+编码分工是硬约束：Unicode 安装器中 `FileWrite` 输出 ANSI 单字节，中文路径会损坏，因此安装器一律用 `FileWriteUTF16LE` 写 `.txt` 指针文件、**从不写 JSON**——唯一例外是 `port.txt`（纯 ASCII 数字，单字节与多字节编码结果一致，服务与 ctl 均可直接读回）；`config.json` 由 `service.js` 独占读写（UTF-8）。`service.js` 的 `decodeText()` 兼容 UTF-16LE、早期误写的 "FF FE + 单字节 ANSI" 与纯 UTF-8 三种形态。
 
 ### 9.2 安装目录布局
 
@@ -294,13 +298,14 @@ C:\Program Files\QuickLink\
 │   └── check-health.js      # 安装后 HTTP 探测 (比 sc query 更可靠)
 ├── public\                  # Vite 产物, 由 Express 经 STATIC_DIR 托管
 ├── quicklink-ctl.cmd        # 服务控制面板 (启动/停止/重启/状态/日志/数据目录)
+├── port.txt                 # 所选端口的副本 (ctl 在 ProgramData 丢失时兜底)
 ├── icon.ico
 └── Uninstall QuickLink.exe
 ```
 
 ### 9.3 数据目录解析与迁移
 
-安装向导在「安装目录」页之后有「选择用户数据目录」页，预填值按**越新越优先**解析（目的：升级安装一定能找到既有数据，而不是安静地建一个空目录让人以为数据丢了）：
+安装向导在「安装目录」页之后有「选择用户数据目录与服务端口」页（数据目录与端口同页选择），数据目录预填值按**越新越优先**解析（目的：升级安装一定能找到既有数据，而不是安静地建一个空目录让人以为数据丢了）：
 
 1. `%ProgramData%\QuickLink\data_dir.txt`（服务版上次的选择）
 2. `%APPDATA%\QuickLink\data_dir.txt`（旧版 Electron 桌面版的选择）
@@ -333,13 +338,22 @@ NSSM 注册参数（`InstallService`）：
 
 监听地址固定 `127.0.0.1`：服务版**不对局域网开放**（无 HTTPS，账号凭据明文存储，只有 `express-rate-limit` 保护登录接口）。`env.HOST` 仅在显式设置时生效，Docker 部署仍保持监听全部网卡的原有语义。
 
+端口选择（安装向导「服务端口」数字输入框，与数据目录同页）：
+
+- 预填上次安装写入的 `%ProgramData%\QuickLink\port.txt`，无则默认 3000——升级安装默认沿用用户既有端口，重装换端口也只是一次输入。
+- 校验：纯数字（`NSD_CreateNumber` 控件天然挡掉非数字）、长度 1~5 位、数值 1~65535；另做一次 netstat 软性占用检查（`netstat -an | findstr /C:":端口 " | findstr /C:"LISTENING"`，命令经由 `cmd.exe /c` 执行故管道符直接写 `|`——写 `^|` 会被 cmd 转义成字面量导致检查静默失效），命中则弹 YESNO 提示"仍要使用该端口吗"，查不到/命令失败不阻断。
+- 确定后写入两份 `port.txt`：`%ProgramData%\QuickLink\port.txt`（权威来源，服务与 ctl 读取）与 `<安装目录>\port.txt`（ctl 在 ProgramData 文件丢失时兜底）。纯 ASCII 数字，`FileWrite` 单字节写入（见 §9.1 编码分工的例外说明）。
+- `service.js` 启动解析优先级：`QUICKLINK_PORT` 环境变量（管理员经 nssm `AppEnvironmentExtra` 手动覆盖，最高）> `port.txt`（安装向导选择，每次安装重写，必须压过历史值否则"重装换端口"不生效）> `config.json`（上次启动持久化）> 默认 3000；任一来源非数字或越界（1~65535）即跳过取下一来源，避免一条脏配置让服务起不来。
+- 静默安装（`/S`）不经过向导页，端口与数据目录一样按"上次值 → 默认值"兜底解析。
+- 快捷方式 `.url`、完成页打开浏览器、服务 Description、注册表 `URLInfoAbout`、`check-health.js` 探测与失败弹窗全部使用运行时拼装的 `http://localhost:<端口>`，不再有编译期写死的 URL。
+
 优雅退出：NSSM 停止服务 / 系统关机时发送 CTRL_BREAK（Node 映射为 `SIGBREAK`），`app.ts` 捕获 `SIGINT`/`SIGTERM`/`SIGBREAK` 后先 `server.close()` 再退出（5 秒兜底强退），避免直接终止进程丢掉 NeDB 尚未落盘的写入。
 
-安装后校验用 `check-health.js` 走 HTTP 而不是解析 `sc query`：服务可能显示 RUNNING 而 Express 已经崩在 `listen` 上（端口 3000 被占用就是如此），NSSM 会按 `AppExit` 策略不停重启，界面上看着"正常"实则完全不可用。探测失败弹窗提示端口占用并指向 `service.err.log`。
+安装后校验用 `check-health.js` 走 HTTP 而不是解析 `sc query`：服务可能显示 RUNNING 而 Express 已经崩在 `listen` 上（所选端口被占用就是如此），NSSM 会按 `AppExit` 策略不停重启，界面上看着"正常"实则完全不可用。探测失败弹窗提示端口占用并指向 `service.err.log`。
 
-日常运维：开始菜单「QuickLink Service Control」（`quicklink-ctl.cmd`，需管理员）提供 启动 / 停止 / 重启 / 详细状态（`sc qc` + `sc query`）/ 打开浏览器 / 打开日志目录 / 跟踪错误日志（`Get-Content -Tail 40 -Wait`）/ 显示数据目录。
+日常运维：开始菜单「QuickLink Service Control」（`quicklink-ctl.cmd`，需管理员）提供 启动 / 停止 / 重启 / 详细状态（`sc qc` + `sc query`）/ 打开浏览器 / 打开日志目录 / 跟踪错误日志（`Get-Content -Tail 40 -Wait`）/ 显示数据目录；菜单头部显示当前 URL，端口号从 `%ProgramData%\QuickLink\port.txt` 读回（缺失/损坏回退安装目录副本，再回退 3000，非纯数字一律按损坏处理）。
 
-快捷方式：开始菜单与桌面各放一个 `QuickLink.url`（`[InternetShortcut]`，双击用默认浏览器打开 `http://localhost:3000`，图标取 `icon.ico`）；安装完成页的「立即在浏览器中打开 QuickLink」勾选框走 `ExecShell open`。
+快捷方式：开始菜单与桌面各放一个 `QuickLink.url`（`[InternetShortcut]`，双击用默认浏览器打开 `http://localhost:<所选端口>`，图标取 `icon.ico`）；安装完成页的「立即在浏览器中打开 QuickLink」勾选框走 `ExecShell open`。
 
 ### 9.5 session 0 限制（已知功能降级）
 
@@ -410,7 +424,7 @@ nginx.conf：`/api` 反代到 `server:3000`，其余 SPA 回退。数据经命�
 
 ### 10.3 Windows 服务安装包
 
-见 §9.6。安装完成后服务已注册为开机自动启动，浏览器访问 `http://localhost:3000`（开始菜单 / 桌面均有 `QuickLink.url` 快捷方式）。
+见 §9.6。安装完成后服务已注册为开机自动启动，浏览器访问 `http://localhost:<安装时所选端口>`（默认 3000，开始菜单 / 桌面均有 `QuickLink.url` 快捷方式，已按所选端口生成）。
 
 ---
 

@@ -412,7 +412,7 @@ const NotesPage: React.FC = () => {
             <span
               style={
                 highlightIds.includes(n._id)
-                  ? { background: "#fffbe6", outline: "1px solid #ffe58f", borderRadius: 3, padding: "0 2px" }
+                  ? { background: token.colorWarningBg, outline: `1px solid ${token.colorWarningBorder}`, borderRadius: 3, padding: "0 2px" }
                   : undefined
               }
             >
@@ -672,7 +672,8 @@ const NotesPage: React.FC = () => {
           position: "relative",
           display: "flex",
           flexDirection: "column",
-          border: "1px solid #f0f0f0",
+          // 描边走 token: 深色主题下自动换暗色 (硬编码 #f0f0f0 在深色下会发亮)
+          border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 8,
           padding: 8,
           // 拖拽时关掉过渡动画, 否则宽度跟不上鼠标
@@ -847,7 +848,7 @@ const NotesPage: React.FC = () => {
       <div
         style={{
           flex: 1,
-          border: "1px solid #f0f0f0",
+          border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 8,
           padding: 12,
           display: "flex",

@@ -116,6 +116,80 @@ export async function update(req: AuthRequest, res: Response): Promise<void> {
   }
 }
 
+// 统一设置当前用户所有标签的每行链接数 (标签管理弹窗「统一设置」入口)
+// 覆盖范围: 已有标签记录 + 仅存在于链接上而无标签记录的分组 (如导入数据带来的标签、
+// 未打标签的"其他"兜底分组), 后者会补建标签记录, 使统一设置作用于页面展示的所有分组
+export async function batchColumns(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { columns } = req.body;
+    const cols = Number(columns);
+    if (!Number.isInteger(cols) || cols < 1 || cols > 8) {
+      res.status(400).json({ success: false, error: "columns 必须为 1~8 的整数" });
+      return;
+    }
+
+    // 1. 更新全部已有标签记录
+    const updatedCount: number = await new Promise((resolve, reject) => {
+      db.tags.update(
+        { userId: req.userId },
+        { $set: { columns: cols } },
+        { multi: true },
+        (err, numAffected) => {
+          if (err) reject(err);
+          else resolve(numAffected);
+        }
+      );
+    });
+
+    // 2. 收集页面上实际存在的全部分组名: 链接上的 tag / 旧 tags[0], 未打标签归入"其他"
+    const links: any[] = await new Promise((resolve, reject) => {
+      db.links.find({ userId: req.userId }).exec((err, docs) => {
+        if (err) reject(err);
+        else resolve(docs as any[]);
+      });
+    });
+    const usedGroups = new Set<string>();
+    for (const l of links) {
+      usedGroups.add(l.tag || (Array.isArray(l.tags) && l.tags.length > 0 ? l.tags[0] : "其他"));
+    }
+
+    // 3. 补建缺失的标签记录 (统一列数, 排序追加到末尾)
+    const existing: any[] = await new Promise((resolve, reject) => {
+      db.tags.find({ userId: req.userId }).exec((err, docs) => {
+        if (err) reject(err);
+        else resolve(docs as any[]);
+      });
+    });
+    const existingNames = new Set(existing.map((t) => t.name));
+    let maxSort = existing.reduce((m, t) => Math.max(m, t.sortOrder ?? 0), -1);
+    const now = new Date().toISOString();
+    let createdCount = 0;
+    for (const name of usedGroups) {
+      if (existingNames.has(name)) continue;
+      const tag: Tag = {
+        _id: uuidv4(),
+        userId: req.userId!,
+        name,
+        columns: cols,
+        sortOrder: ++maxSort,
+        createdAt: now,
+      };
+      await new Promise<void>((resolve, reject) => {
+        db.tags.insert(tag as any, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      createdCount++;
+    }
+
+    const total = updatedCount + createdCount;
+    res.json({ success: true, message: `已统一设置 ${total} 个分组每行展示 ${cols} 个链接`, data: { count: total, columns: cols } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 export async function reorder(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { ids } = req.body;

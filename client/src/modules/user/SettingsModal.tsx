@@ -65,13 +65,14 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
   };
 
   return (
-    <Modal title="设置" open={open} onCancel={onClose} footer={null} width={440} destroyOnClose>
+    <Modal title="设置" open={open} onCancel={onClose} footer={null} width={440} destroyOnHidden>
       {/* 账号信息: 当前登录用户名与注册邮箱 */}
       <div style={rowStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <Avatar
             size={40}
-            style={{ backgroundColor: token.colorPrimary, flexShrink: 0 }}
+            // 品牌渐变头像, 与登录页/侧栏 BrandMark 同一视觉语言
+            style={{ background: "linear-gradient(135deg, #1677ff 0%, #13c2c2 100%)", flexShrink: 0 }}
             icon={<UserOutlined />}
           />
           <div style={{ minWidth: 0 }}>

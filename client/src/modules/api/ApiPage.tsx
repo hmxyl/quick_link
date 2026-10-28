@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Dropdown, Input, Modal, Space, message, Typography, Tree } from "antd";
+import { Button, Dropdown, Input, Modal, Space, message, Typography, Tree, theme } from "antd";
 import {
   SendOutlined,
   SaveOutlined,
@@ -31,6 +31,7 @@ function replaceEnvVars(str: string, vars: Record<string, string>): string {
 const ApiPage: React.FC = () => {
   // 页面可见性: 不活跃时不响应全局快捷键
   const isActive = usePageVisibility("/api");
+  const { token } = theme.useToken();
 
   // 环境
   const [environments, setEnvironments] = useState<ApiEnvironment[]>([]);
@@ -629,7 +630,7 @@ const ApiPage: React.FC = () => {
         cancelText="取消"
         width={600}
       >
-        <div style={{ marginBottom: 8, color: "#888", fontSize: 12 }}>
+        <div style={{ marginBottom: 8, color: token.colorTextSecondary, fontSize: 12 }}>
           粘贴完整的 curl 命令，支持 -X、-H、-d、-u、-b 等常用参数
         </div>
         <Input.TextArea

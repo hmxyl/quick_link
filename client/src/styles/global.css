@@ -1,0 +1,46 @@
+/*
+ * QuickLink 全局基础样式 (antd 体系之外的部分)
+ * 主题相关颜色一律交给 antd token / CSS 变量, 这里只做平台级细节:
+ * 细滚动条 / 平滑主题切换过渡 / 尊重系统"减少动态效果"设置。
+ */
+
+/* 主题切换时背景与描边平滑过渡, 避免深浅色切换瞬间的生硬闪烁 */
+body,
+.ant-layout,
+.ant-layout-sider,
+.ant-layout-content,
+.ant-card {
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* 细滚动条: 深浅色主题下均使用中性半透明色, 不与内容抢视觉 */
+* {
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.35);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.55);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 尊重系统"减少动态效果"偏好: 关闭动画与过渡 (含 antd 组件动效) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

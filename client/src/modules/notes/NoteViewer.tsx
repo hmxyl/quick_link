@@ -1097,7 +1097,7 @@ const NoteViewer: React.FC<Props> = ({
         onCancel={() => setMediaModal(null)}
         okText="插入"
         cancelText="取消"
-        destroyOnClose
+        destroyOnHidden
         width={420}
       >
         <Form form={mediaForm} layout="vertical" style={{ marginTop: 12 }}>

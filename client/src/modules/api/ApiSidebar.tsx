@@ -317,7 +317,7 @@ const ApiSidebar: React.FC<Props> = ({
   };
 
   return (
-    <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #f0f0f0", paddingRight: 12 }}>
+    <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: `1px solid ${token.colorBorderSecondary}`, paddingRight: 12 }}>
       <Tabs
         size="small"
         items={[

@@ -7,6 +7,7 @@ import type {
   Link,
   AccountSecrets,
   Tag,
+  PresetColor,
   Note,
   Attachment,
   CreateLinkRequest,
@@ -89,8 +90,8 @@ export const linkApi = {
   exportJson: () =>
     api.get("/links/export", { params: { format: "json" }, responseType: "blob" }).then((r) => r.data as Blob),
 
-  batchImport: (links: CreateLinkRequest[], customIcons?: any[], tags?: any[]) =>
-    api.post<ApiResponse<{ count: number }>>("/links/batch", { links, customIcons, tags }).then((r) => r.data),
+  batchImport: (links: CreateLinkRequest[], customIcons?: any[], tags?: any[], linkColors?: any[]) =>
+    api.post<ApiResponse<{ count: number }>>("/links/batch", { links, customIcons, tags, linkColors }).then((r) => r.data),
 
   getSecrets: (id: string) =>
     api.get<ApiResponse<AccountSecrets>>(`/links/${id}/secrets`).then((r) => r.data),
@@ -137,6 +138,10 @@ export const tagApi = {
   reorder: (ids: string[]) =>
     api.put<ApiResponse<null>>("/tags/reorder", { ids }).then((r) => r.data),
 
+  // 统一设置所有标签的每行链接数 (含补建"其他"分组)
+  batchColumns: (columns: number) =>
+    api.put<ApiResponse<{ count: number; columns: number }>>("/tags/batch-columns", { columns }).then((r) => r.data),
+
   remove: (id: string) => api.delete(`/tags/${id}`).then((r) => r.data),
 };
 
@@ -157,6 +162,17 @@ export const customIconApi = {
   remove: (id: string) => api.delete(`/custom-icons/${id}`).then((r) => r.data),
 
   clearAll: () => api.delete<ApiResponse<{ count: number }>>("/custom-icons").then((r) => r.data),
+};
+
+// Preset Colors (预设背景色)
+export const presetColorApi = {
+  list: () => api.get<ApiResponse<PresetColor[]>>("/preset-colors").then((r) => r.data),
+
+  // color: 十六进制色值 (#RGB/#RGBA/#RRGGBB/#RRGGBBAA)
+  add: (color: string) =>
+    api.post<ApiResponse<PresetColor>>("/preset-colors", { color }).then((r) => r.data),
+
+  remove: (id: string) => api.delete(`/preset-colors/${id}`).then((r) => r.data),
 };
 
 // 触发浏览器下载 Blob

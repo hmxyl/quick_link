@@ -1,23 +1,54 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Modal, Form, Input, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Card } from "antd";
+import { Button, Modal, Form, Input, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Card, ColorPicker, Skeleton, Empty } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
   KeyOutlined, CopyOutlined, ExportOutlined,
   DownloadOutlined, UploadOutlined, TagsOutlined, SyncOutlined,
-  WarningOutlined,
+  WarningOutlined, BgColorsOutlined,
 } from "@ant-design/icons";
-import { linkApi, customIconApi } from "../../services/api";
+import { linkApi, customIconApi, presetColorApi } from "../../services/api";
 import type { CustomIcon } from "../../services/api";
 import { LinkIcon, IconPicker } from "./LinkIcon";
 import TagManager from "./TagManager";
-import type { Link, Tag as TagType, AccountSecrets } from "../../types";
+import ColorManager from "./ColorManager";
+import type { Link, Tag as TagType, AccountSecrets, PresetColor } from "../../types";
 
 const { Text } = Typography;
 
 // 链接卡片悬浮 CSS (模块级一次性注入, 避免每次渲染创建新 style 标签)
+// 操作栏位于链接信息上方的独立保留行: 悬浮淡入, 不悬浮时隐藏且不可点击 (visibility),
+// 因为占据固定空间, 淡入淡出不会引起卡片高度/布局跳动, 也不遮挡链接内容。
+// .link-card-dark: 用户设置深色背景色时切换浅色文字与按钮, 保证 WCAG 可读性
+// (antd v5 组件规则用 :where() 包裹, 特异性为 0, 这里的普通选择器必然覆盖成功)。
 const LINK_CARD_CSS = `
+  .link-card-actions {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
   .ant-card-hoverable:hover .link-card-actions {
     opacity: 1 !important;
+    visibility: visible;
+  }
+  .ant-card-hoverable.link-card {
+    transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease, background-color 0.25s ease;
+  }
+  .ant-card-hoverable.link-card:hover {
+    transform: translateY(-1px);
+  }
+  .ant-card-hoverable.link-card:active {
+    transform: translateY(0) scale(0.985);
+  }
+  .link-card-dark .ant-typography {
+    color: rgba(255, 255, 255, 0.92) !important;
+  }
+  .link-card-dark .ant-btn {
+    color: rgba(255, 255, 255, 0.72);
+  }
+  .link-card-dark .ant-btn:hover,
+  .link-card-dark .ant-btn:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
   }
 `;
 if (typeof document !== "undefined" && !document.querySelector('[data-ql-links]')) {
@@ -40,6 +71,27 @@ const openLinkUrl = (url: string): boolean => {
   navigator.clipboard.writeText(localPath);
   message.info("浏览器无法直接打开本地文件，路径已复制到剪贴板");
   return false;
+};
+
+// 判断十六进制背景色是否偏深 (WCAG 相对亮度 < 0.35), 深色背景时卡片切换浅色文字保证可读性。
+// 支持 #RGB/#RGBA/#RRGGBB/#RRGGBBAA (与服务端 sanitizeBackgroundColor 允许的格式一致)。
+const isDarkColor = (hex: string): boolean => {
+  const m = hex.replace("#", "");
+  const full = m.length === 3 || m.length === 4 ? m.slice(0, 3).split("").map((c) => c + c).join("") : m.slice(0, 6);
+  const r = parseInt(full.slice(0, 2), 16) / 255;
+  const g = parseInt(full.slice(2, 4), 16) / 255;
+  const b = parseInt(full.slice(4, 6), 16) / 255;
+  if ([r, g, b].some((v) => Number.isNaN(v))) return false;
+  const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L < 0.35;
+};
+
+// 色值比较键: 3/4 位简写展开为 6 位并忽略大小写, 使 #F60 与 #ff6600 视为同一颜色
+const normalizeHexKey = (hex: string): string => {
+  const m = hex.replace("#", "").toLowerCase();
+  const full = m.length === 3 || m.length === 4 ? m.slice(0, 3).split("").map((c) => c + c).join("") : m.slice(0, 6);
+  return `#${full}`;
 };
 
 // 链接卡片悬浮设置按钮 (提取到组件外部, 避免每次渲染时重新定义导致完全卸载/重建)
@@ -96,16 +148,33 @@ const LinksPage: React.FC = () => {
   const [tagList, setTagList] = useState<TagType[]>([]);
   const [tagColumns, setTagColumns] = useState<Record<string, number>>({});
   const [customIcons, setCustomIcons] = useState<CustomIcon[]>([]);
+  // 预设背景色色板 (背景色管理维护, 表单快捷选用)
+  const [presetColors, setPresetColors] = useState<PresetColor[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   // 防抖搜索值: 输入停顿 300ms 后才触发 API 请求
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [colorManagerOpen, setColorManagerOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<Link | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form] = Form.useForm();
+
+  // 表单当前背景色 (色板选中态与「存为预设」判定): 值可能为 string / Color 对象 / null(清除)
+  const watchedBg: any = Form.useWatch("backgroundColor", form);
+  const currentBgHex: string | null = (() => {
+    const v: any = watchedBg;
+    if (v == null || v.cleared) return null;
+    if (typeof v === "string") return v.toLowerCase();
+    const hex = typeof v.toHexString === "function" ? v.toHexString() : null;
+    return hex ? hex.toLowerCase() : null;
+  })();
+  // 现选色是否已存在预设 (3/4 位简写与 6 位展开形式视为同一颜色)
+  const isCurrentInPresets =
+    !!currentBgHex &&
+    presetColors.some((p) => normalizeHexKey(p.color) === normalizeHexKey(currentBgHex));
 
   // Secrets / account state
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -165,7 +234,15 @@ const LinksPage: React.FC = () => {
     } catch { /* ignore */ }
   };
 
+  const loadPresetColors = useCallback(async () => {
+    try {
+      const res = await presetColorApi.list();
+      setPresetColors(res.data || []);
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => { loadCustomIcons(); }, []);
+  useEffect(() => { loadPresetColors(); }, [loadPresetColors]);
   useEffect(() => { loadAllLinks(); }, [loadAllLinks]);
 
   // URL 去重搜索: 输入停顿 400ms 后查询已有链接
@@ -209,6 +286,7 @@ const LinksPage: React.FC = () => {
       description: record.description,
       icon: record.icon,
       tag: record.tag || (record.tags && record.tags.length > 0 ? record.tags[0] : "其他"),
+      backgroundColor: record.backgroundColor ?? null,
     });
     setDuplicateLinks([]);
     setModalOpen(true);
@@ -315,7 +393,16 @@ const LinksPage: React.FC = () => {
     try {
       const values = await form.validateFields();
       const { url, title, description, icon, tag } = values;
-      const payload = { url, title, description, icon, tag };
+      // 背景色: 表单值为字符串 (未改动) 或 Color 对象 (新选择);
+      // 点击清除时为 cleared 标记的 Color 对象, 统一转为十六进制字符串或 null (清除)
+      const bgVal: any = values.backgroundColor;
+      const bgColor =
+        bgVal == null || bgVal.cleared
+          ? null
+          : typeof bgVal === "string"
+            ? bgVal
+            : (bgVal.toHexString?.() ?? null);
+      const payload = { url, title, description, icon, tag, backgroundColor: bgColor };
 
       if (editingLink) {
         await linkApi.update(editingLink._id, payload);
@@ -382,18 +469,31 @@ const LinksPage: React.FC = () => {
         : parsed.data || parsed.links || [];
       const importIcons: any[] = Array.isArray(parsed.customIcons) ? parsed.customIcons : [];
       const importTags: any[] = Array.isArray(parsed.tags) ? parsed.tags : [];
+      const importColors: any[] = Array.isArray(parsed.linkColors) ? parsed.linkColors : [];
       if (items.length === 0) {
         message.warning("导入文件中没有链接数据");
         return;
       }
-      const res = await linkApi.batchImport(items, importIcons, importTags);
+      const res = await linkApi.batchImport(items, importIcons, importTags, importColors);
       message.success(res.message || `成功导入 ${res.data?.count ?? items.length} 条链接`);
       loadAllLinks();
       loadCustomIcons();
+      loadPresetColors();
     } catch {
       message.error("导入失败：文件格式无效");
     } finally {
       e.target.value = "";
+    }
+  };
+
+  const handleSaveAsPreset = async () => {
+    if (!currentBgHex) return;
+    try {
+      await presetColorApi.add(currentBgHex);
+      message.success("已存为预设");
+      await loadPresetColors();
+    } catch (err: any) {
+      message.error(err.response?.data?.error || "保存失败");
     }
   };
 
@@ -444,15 +544,15 @@ const LinksPage: React.FC = () => {
 
   return (
     <div>
-      {/* 顶部工具栏 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+      {/* 顶部工具栏: 窄窗口自动换行, 搜索框保底宽度 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap", rowGap: 8 }}>
         <Input.Search
           placeholder="搜索链接..."
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onSearch={(v) => setSearch(v)}
-          style={{ flex: 1, minWidth: 0 }}
+          style={{ flex: 1, minWidth: 200 }}
           prefix={<SearchOutlined />}
         />
         <Popconfirm
@@ -467,6 +567,7 @@ const LinksPage: React.FC = () => {
         <Button icon={<DownloadOutlined />} loading={exportLoading} onClick={handleExport}>导出</Button>
         <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>导入</Button>
         <Button icon={<TagsOutlined />} onClick={() => setTagManagerOpen(true)}>标签管理</Button>
+        <Button icon={<BgColorsOutlined />} onClick={() => setColorManagerOpen(true)}>背景色管理</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           添加链接
         </Button>
@@ -481,12 +582,26 @@ const LinksPage: React.FC = () => {
 
       {/* 标签分组链接卡片 */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: 40 }}>
-          <Text type="secondary">加载中...</Text>
+        /* 骨架屏占位: 与真实卡片同网格结构, 加载完成无布局跳动 */
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+          {Array.from({ length: 10 }).map((_, i) => (
+            <Card key={i} size="small" styles={{ body: { padding: "8px 16px 12px", display: "flex", flexDirection: "column", gap: 10 } }}>
+              <Skeleton active title={false} paragraph={{ rows: 2 }} />
+            </Card>
+          ))}
         </div>
       ) : tagNames.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40 }}>
-          <Text type="secondary">暂无链接，点击上方「添加链接」</Text>
+        <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={debouncedSearch ? "没有找到匹配的链接，换个关键词试试" : "暂无链接"}
+          >
+            {!debouncedSearch && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+                添加第一条链接
+              </Button>
+            )}
+          </Empty>
         </div>
       ) : (
         tagNames.map((tagName) => {
@@ -494,20 +609,23 @@ const LinksPage: React.FC = () => {
           const cols = tagColumns[tagName] ?? 5;
           const tagInfo = tagList.find((t) => t.name === tagName);
           const tagColor = tagInfo?.color;
+          // 标签色偏浅时切换深色文字 (默认主题蓝按深色处理)
+          const tagDark = !tagColor || isDarkColor(tagColor);
 
           return (
             <div key={tagName} style={{ marginBottom: 24 }}>
-              {/* 标签标题 */}
+              {/* 标签标题: 胶囊徽章 + 计数 */}
               <div style={{ display: "flex", alignItems: "center", marginBottom: 12, gap: 8 }}>
                 <span
                   style={{
                     display: "inline-block",
-                    padding: "2px 12px",
-                    borderRadius: 4,
+                    padding: "3px 14px",
+                    borderRadius: 999,
                     background: tagColor || token.colorPrimary,
-                    color: "#fff",
-                    fontSize: 14,
+                    color: tagDark ? "#fff" : "rgba(0, 0, 0, 0.88)",
+                    fontSize: 13,
                     fontWeight: 600,
+                    letterSpacing: 0.3,
                   }}
                 >
                   {tagName}
@@ -523,48 +641,33 @@ const LinksPage: React.FC = () => {
                   gap: 12,
                 }}
               >
-                {links.map((link) => (
+                {links.map((link) => {
+                  // 深色背景色时挂 .link-card-dark, 标题/操作按钮自动切浅色 (见 LINK_CARD_CSS)
+                  const bgDark = !!link.backgroundColor && isDarkColor(link.backgroundColor);
+                  return (
                   <Card
                     key={link._id}
                     size="small"
                     hoverable
+                    className={`link-card${bgDark ? " link-card-dark" : ""}`}
                     onClick={() => openLink(link)}
-                    style={{ cursor: link.url ? "pointer" : "default" }}
+                    style={{
+                      cursor: link.url ? "pointer" : "default",
+                      background: link.backgroundColor || undefined,
+                    }}
                     styles={{
-                      body: { padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 },
+                      body: {
+                        padding: "8px 16px 12px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      },
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                      <LinkIcon icon={link.icon} url={link.url} />
-                      <Text
-                        ellipsis
-                        style={{ flex: 1, fontSize: 14 }}
-                        title={link.title || link.url || "(无标题)"}
-                      >
-                        {link.title || link.url || "(无标题)"}
-                      </Text>
-                      {link.hasAccount && (
-                        <Tooltip title="有关联账号">
-                          <KeyOutlined style={{ color: token.colorWarning, fontSize: 12, flexShrink: 0 }} />
-                        </Tooltip>
-                      )}
-                    </div>
-                    {/* 悬浮设置按钮 */}
+                    {/* 悬浮操作栏: 固定位于链接信息上方, 独立占位不遮挡链接内容 */}
                     <div
-                      style={{
-                        position: "absolute",
-                        right: 8,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        opacity: 0,
-                        transition: "opacity 0.2s",
-                        background: token.colorBgElevated,
-                        borderRadius: 6,
-                        padding: "2px 4px",
-                        boxShadow: token.boxShadowSecondary,
-                        border: `1px solid ${token.colorBorderSecondary}`,
-                      }}
                       className="link-card-actions"
+                      style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", minHeight: 24 }}
                     >
                       <LinkSettings
                         link={link}
@@ -576,8 +679,25 @@ const LinksPage: React.FC = () => {
                         onDelete={handleDelete}
                       />
                     </div>
+                    {/* 链接信息行 */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                      <LinkIcon icon={link.icon} url={link.url} />
+                      <Text
+                        ellipsis
+                        style={{ flex: 1, fontSize: 14, fontWeight: 500 }}
+                        title={link.title || link.url || "(无标题)"}
+                      >
+                        {link.title || link.url || "(无标题)"}
+                      </Text>
+                      {link.hasAccount && (
+                        <Tooltip title="有关联账号">
+                          <KeyOutlined style={{ color: token.colorWarning, fontSize: 12, flexShrink: 0 }} />
+                        </Tooltip>
+                      )}
+                    </div>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -641,14 +761,72 @@ const LinksPage: React.FC = () => {
               );
             }}
           </Form.Item>
+          <Form.Item label="背景色" tooltip="链接卡片背景色：点击下方预设色板快速选择，或用取色器自定义；留空使用默认背景">
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Form.Item name="backgroundColor" noStyle>
+                <ColorPicker allowClear showText format="hex" />
+              </Form.Item>
+              {/* 预设色板: 默认色 + 背景色管理维护的预设 + 管理/存为预设入口 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <Tooltip title="默认背景">
+                  <button
+                    type="button"
+                    aria-label="使用默认背景"
+                    onClick={() => form.setFieldValue("backgroundColor", null)}
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: "50%",
+                      cursor: "pointer",
+                      padding: 0,
+                      outline: "none",
+                      border: `1px dashed ${token.colorTextQuaternary}`,
+                      background: `linear-gradient(135deg, transparent 44%, ${token.colorTextTertiary} 44%, ${token.colorTextTertiary} 56%, transparent 56%)`,
+                      boxShadow: currentBgHex == null ? `0 0 0 2px ${token.colorBgContainer}, 0 0 0 4px ${token.colorPrimary}` : undefined,
+                    }}
+                  />
+                </Tooltip>
+                {presetColors.map((p) => {
+                  const selected = !!currentBgHex && normalizeHexKey(p.color) === normalizeHexKey(currentBgHex);
+                  return (
+                    <Tooltip key={p._id} title={p.color}>
+                      <button
+                        type="button"
+                        aria-label={`背景色 ${p.color}`}
+                        onClick={() => form.setFieldValue("backgroundColor", p.color)}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: "50%",
+                          background: p.color,
+                          border: "1px solid rgba(0,0,0,0.14)",
+                          cursor: "pointer",
+                          padding: 0,
+                          outline: "none",
+                          boxShadow: selected ? `0 0 0 2px ${token.colorBgContainer}, 0 0 0 4px ${token.colorPrimary}` : undefined,
+                        }}
+                      />
+                    </Tooltip>
+                  );
+                })}
+                <a style={{ fontSize: 12, marginLeft: 4 }} onClick={() => setColorManagerOpen(true)}>
+                  管理
+                </a>
+                {currentBgHex && !isCurrentInPresets && (
+                  <a style={{ fontSize: 12 }} onClick={handleSaveAsPreset}>
+                    存为预设
+                  </a>
+                )}
+              </div>
+            </Space>
+          </Form.Item>
           <Form.Item name="tag" label="标签">
             <Select
               placeholder="选择标签"
               allowClear
-              options={[
-                { label: "其他", value: "其他" },
-                ...tagList.map((t) => ({ label: t.name, value: t.name })),
-              ]}
+              options={Array.from(
+                new Set(["其他", ...tagList.map((t) => t.name)])
+              ).map((name) => ({ label: name, value: name }))}
             />
           </Form.Item>
         </Form>
@@ -659,6 +837,13 @@ const LinksPage: React.FC = () => {
         open={tagManagerOpen}
         onClose={() => setTagManagerOpen(false)}
         onChanged={() => { loadAllLinks(); }}
+      />
+
+      {/* Preset Color Management Modal */}
+      <ColorManager
+        open={colorManagerOpen}
+        onClose={() => setColorManagerOpen(false)}
+        onChanged={() => { loadPresetColors(); }}
       />
 
       {/* View Secrets Modal */}
