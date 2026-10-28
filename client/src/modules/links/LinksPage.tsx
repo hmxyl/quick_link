@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, Form, Input, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Card, ColorPicker, Skeleton, Empty } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
@@ -16,8 +16,9 @@ import type { Link, Tag as TagType, AccountSecrets, PresetColor } from "../../ty
 const { Text } = Typography;
 
 // 链接卡片悬浮 CSS (模块级一次性注入, 避免每次渲染创建新 style 标签)
-// 操作栏位于链接信息上方的独立保留行: 悬浮淡入, 不悬浮时隐藏且不可点击 (visibility),
-// 因为占据固定空间, 淡入淡出不会引起卡片高度/布局跳动, 也不遮挡链接内容。
+// 操作栏与链接信息同一行: 绝对定位于信息行右端, 信息行永久预留操作栏宽度的一半
+// (useLayoutEffect 实测写入 paddingRight, 无论操作是否显示都恒定), 因此淡入淡出
+// 不引起标题省略位置/卡片布局跳动; 不悬浮时 visibility:hidden 不可点击。
 // .link-card-dark: 用户设置深色背景色时切换浅色文字与按钮, 保证 WCAG 可读性
 // (antd v5 组件规则用 :where() 包裹, 特异性为 0, 这里的普通选择器必然覆盖成功)。
 const LINK_CARD_CSS = `
@@ -194,6 +195,24 @@ const LinksPage: React.FC = () => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // 同行操作栏半宽预留 (需求: 链接与操作栏同一行, 链接宽度加上操作栏宽度/2,
+  // 无论操作是否显示): 每张卡片实测自身操作栏宽度, 以一半作为信息行的固定
+  // paddingRight, 标题省略号位置恒定、悬浮淡入不引起任何布局跳动。
+  // visibility:hidden 不影响 offsetWidth 测量。图标字体异步加载、antd 样式后置
+  // 应用或按钮增减 (如加入图标库) 都会改变操作栏宽度, 由 ResizeObserver 捕获
+  // 重测; 初始挂载另用 useLayoutEffect 在首帧绘制前同步测量一次。
+  const [actionHalfPads, setActionHalfPads] = useState<Record<string, number>>({});
+  const actionBarEls = useRef(new Map<string, HTMLDivElement>());
+  const actionBarObservers = useRef(new Map<string, ResizeObserver>());
+  const setHalfPad = useCallback((id: string, half: number) => {
+    setActionHalfPads((prev) => (half > 0 && prev[id] !== half ? { ...prev, [id]: half } : prev));
+  }, []);
+  useLayoutEffect(() => {
+    actionBarEls.current.forEach((el, id) => setHalfPad(id, Math.round(el.offsetWidth / 2)));
+  }, [groupedLinks, customIcons, setHalfPad]);
+  // 实测前的兜底半宽 (useLayoutEffect 在首帧绘制前完成测量, 通常不会展示)
+  const ACTION_HALF_FALLBACK = 60;
 
   const loadAllLinks = useCallback(async () => {
     setLoading(true);
@@ -654,37 +673,30 @@ const LinksPage: React.FC = () => {
                     style={{
                       cursor: link.url ? "pointer" : "default",
                       background: link.backgroundColor || undefined,
+                      // 网格项 min-width 归零: 长标题的固有宽度不再撑大 1fr 轨道,
+                      // 超出部分交给标题省略号 (配合行内 Text 的 minWidth:0)
+                      minWidth: 0,
                     }}
-                    styles={{
-                      body: {
-                        padding: "8px 16px 12px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                      },
-                    }}
+                    styles={{ body: { padding: "10px 16px" } }}
                   >
-                    {/* 悬浮操作栏: 固定位于链接信息上方, 独立占位不遮挡链接内容 */}
+                    {/* 链接信息 + 同行悬浮操作栏:
+                        操作栏绝对定位于信息行右端 (同一行), 信息行永久预留操作栏宽度的
+                        一半 (实测写入 paddingRight, 无论操作是否显示恒定), 标题省略位
+                        置不因悬浮淡入而改变; 不悬浮时操作栏隐藏且不可点击 */}
                     <div
-                      className="link-card-actions"
-                      style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", minHeight: 24 }}
+                      style={{
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        minWidth: 0,
+                        paddingRight: actionHalfPads[link._id] ?? ACTION_HALF_FALLBACK,
+                      }}
                     >
-                      <LinkSettings
-                        link={link}
-                        customIcons={customIcons}
-                        onCopyAndOpen={handleCopyAndOpen}
-                        onViewSecrets={handleViewSecrets}
-                        onAddToIconLibrary={handleAddToIconLibrary}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                      />
-                    </div>
-                    {/* 链接信息行 */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
                       <LinkIcon icon={link.icon} url={link.url} />
                       <Text
                         ellipsis
-                        style={{ flex: 1, fontSize: 14, fontWeight: 500 }}
+                        style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500 }}
                         title={link.title || link.url || "(无标题)"}
                       >
                         {link.title || link.url || "(无标题)"}
@@ -694,6 +706,38 @@ const LinksPage: React.FC = () => {
                           <KeyOutlined style={{ color: token.colorWarning, fontSize: 12, flexShrink: 0 }} />
                         </Tooltip>
                       )}
+                      <div
+                        ref={(el) => {
+                          const id = link._id;
+                          if (el) {
+                            actionBarEls.current.set(id, el);
+                            // 挂新的 ResizeObserver 前先断开旧的 (ref 回调每次渲染都会
+                            // detach/attach, 复用会导致观察的是已分离的旧元素)
+                            actionBarObservers.current.get(id)?.disconnect();
+                            const ro = new ResizeObserver(() =>
+                              setHalfPad(id, Math.round(el.offsetWidth / 2))
+                            );
+                            actionBarObservers.current.set(id, ro);
+                            ro.observe(el);
+                          } else {
+                            actionBarEls.current.delete(id);
+                            actionBarObservers.current.get(id)?.disconnect();
+                            actionBarObservers.current.delete(id);
+                          }
+                        }}
+                        className="link-card-actions"
+                        style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center" }}
+                      >
+                        <LinkSettings
+                          link={link}
+                          customIcons={customIcons}
+                          onCopyAndOpen={handleCopyAndOpen}
+                          onViewSecrets={handleViewSecrets}
+                          onAddToIconLibrary={handleAddToIconLibrary}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                        />
+                      </div>
                     </div>
                   </Card>
                   );
