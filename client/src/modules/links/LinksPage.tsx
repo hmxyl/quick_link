@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, Form, Input, Space, message, Popconfirm, Select, Typography, theme, Tooltip, Card, ColorPicker, Skeleton, Empty } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
@@ -16,9 +16,9 @@ import type { Link, Tag as TagType, AccountSecrets, PresetColor } from "../../ty
 const { Text } = Typography;
 
 // 链接卡片悬浮 CSS (模块级一次性注入, 避免每次渲染创建新 style 标签)
-// 操作栏与链接信息同一行: 绝对定位于信息行右端, 信息行永久预留操作栏宽度的一半
-// (useLayoutEffect 实测写入 paddingRight, 无论操作是否显示都恒定), 因此淡入淡出
-// 不引起标题省略位置/卡片布局跳动; 不悬浮时 visibility:hidden 不可点击。
+// 操作栏与链接信息同一行: 作为信息行末尾的常规 flex 项永久保留自身空间
+// (visibility:hidden 不改变布局), 与图标/标题/钥匙图标互不重叠, 悬浮淡入
+// 绝不遮挡链接信息、不引起任何布局跳动; 不悬浮时不可点击。
 // .link-card-dark: 用户设置深色背景色时切换浅色文字与按钮, 保证 WCAG 可读性
 // (antd v5 组件规则用 :where() 包裹, 特异性为 0, 这里的普通选择器必然覆盖成功)。
 const LINK_CARD_CSS = `
@@ -195,24 +195,6 @@ const LinksPage: React.FC = () => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
-
-  // 同行操作栏半宽预留 (需求: 链接与操作栏同一行, 链接宽度加上操作栏宽度/2,
-  // 无论操作是否显示): 每张卡片实测自身操作栏宽度, 以一半作为信息行的固定
-  // paddingRight, 标题省略号位置恒定、悬浮淡入不引起任何布局跳动。
-  // visibility:hidden 不影响 offsetWidth 测量。图标字体异步加载、antd 样式后置
-  // 应用或按钮增减 (如加入图标库) 都会改变操作栏宽度, 由 ResizeObserver 捕获
-  // 重测; 初始挂载另用 useLayoutEffect 在首帧绘制前同步测量一次。
-  const [actionHalfPads, setActionHalfPads] = useState<Record<string, number>>({});
-  const actionBarEls = useRef(new Map<string, HTMLDivElement>());
-  const actionBarObservers = useRef(new Map<string, ResizeObserver>());
-  const setHalfPad = useCallback((id: string, half: number) => {
-    setActionHalfPads((prev) => (half > 0 && prev[id] !== half ? { ...prev, [id]: half } : prev));
-  }, []);
-  useLayoutEffect(() => {
-    actionBarEls.current.forEach((el, id) => setHalfPad(id, Math.round(el.offsetWidth / 2)));
-  }, [groupedLinks, customIcons, setHalfPad]);
-  // 实测前的兜底半宽 (useLayoutEffect 在首帧绘制前完成测量, 通常不会展示)
-  const ACTION_HALF_FALLBACK = 60;
 
   const loadAllLinks = useCallback(async () => {
     setLoading(true);
@@ -680,19 +662,11 @@ const LinksPage: React.FC = () => {
                     styles={{ body: { padding: "10px 16px" } }}
                   >
                     {/* 链接信息 + 同行悬浮操作栏:
-                        操作栏绝对定位于信息行右端 (同一行), 信息行永久预留操作栏宽度的
-                        一半 (实测写入 paddingRight, 无论操作是否显示恒定), 标题省略位
-                        置不因悬浮淡入而改变; 不悬浮时操作栏隐藏且不可点击 */}
-                    <div
-                      style={{
-                        position: "relative",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        minWidth: 0,
-                        paddingRight: actionHalfPads[link._id] ?? ACTION_HALF_FALLBACK,
-                      }}
-                    >
+                        操作栏为信息行末尾的常规 flex 项 (同一行), 永久保留自身空间
+                        (visibility:hidden 不改变布局), 与图标/标题/钥匙图标天然不
+                        重叠——悬浮淡入显示时绝不遮挡链接信息, 也不引起任何布局跳动;
+                        卡片过窄时操作栏按钮换行 (Space wrap) 而非挤压标题 */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                       <LinkIcon icon={link.icon} url={link.url} />
                       <Text
                         ellipsis
@@ -707,26 +681,8 @@ const LinksPage: React.FC = () => {
                         </Tooltip>
                       )}
                       <div
-                        ref={(el) => {
-                          const id = link._id;
-                          if (el) {
-                            actionBarEls.current.set(id, el);
-                            // 挂新的 ResizeObserver 前先断开旧的 (ref 回调每次渲染都会
-                            // detach/attach, 复用会导致观察的是已分离的旧元素)
-                            actionBarObservers.current.get(id)?.disconnect();
-                            const ro = new ResizeObserver(() =>
-                              setHalfPad(id, Math.round(el.offsetWidth / 2))
-                            );
-                            actionBarObservers.current.set(id, ro);
-                            ro.observe(el);
-                          } else {
-                            actionBarEls.current.delete(id);
-                            actionBarObservers.current.get(id)?.disconnect();
-                            actionBarObservers.current.delete(id);
-                          }
-                        }}
                         className="link-card-actions"
-                        style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center" }}
+                        style={{ display: "flex", alignItems: "center" }}
                       >
                         <LinkSettings
                           link={link}
