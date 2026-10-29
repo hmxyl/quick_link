@@ -30,7 +30,8 @@ const ColorChip: React.FC<{
           height: 18,
           borderRadius: "50%",
           background: preset.color,
-          border: "1px solid rgba(0,0,0,0.12)",
+          // 描边走 token: 浅/深色下都可见 (硬编码黑色半透明在深色主题下不可见)
+          border: `1px solid ${token.colorBorder}`,
           display: "inline-block",
           flexShrink: 0,
         }}

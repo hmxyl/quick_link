@@ -10,6 +10,7 @@ import {
   List,
   Popconfirm,
   Menu,
+  Tooltip,
   message,
   theme,
 } from "antd";
@@ -112,7 +113,7 @@ const ApiSidebar: React.FC<Props> = ({
       if (item.type === "request") {
         node.title = (
           <span>
-            <Tag color={METHOD_COLORS[item.method || "GET"]} style={{ marginRight: 4, fontSize: 10, lineHeight: "16px", padding: "0 4px" }}>
+            <Tag color={METHOD_COLORS[item.method || "GET"]} style={{ marginRight: 4, fontSize: 11, lineHeight: "16px", padding: "0 4px" }}>
               {item.method?.slice(0, 3) || "GET"}
             </Tag>
             {item.name}
@@ -406,9 +407,13 @@ const ApiSidebar: React.FC<Props> = ({
             children: (
               <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 200px)" }}>
                 <div style={{ marginBottom: 8, display: "flex", gap: 4 }}>
-                  <Button size="small" icon={<ReloadOutlined />} onClick={onRefreshHistory} />
+                  <Tooltip title="刷新历史">
+                    <Button size="small" icon={<ReloadOutlined />} onClick={onRefreshHistory} />
+                  </Tooltip>
                   <Popconfirm title="确定清空所有历史?" onConfirm={async () => { await apiManagerApi.clearHistory(); onRefreshHistory(); message.success("已清空"); }}>
-                    <Button size="small" icon={<ClearOutlined />} />
+                    <Tooltip title="清空历史">
+                      <Button size="small" icon={<ClearOutlined />} />
+                    </Tooltip>
                   </Popconfirm>
                 </div>
                 <div style={{ flex: 1, overflow: "auto" }}>
@@ -420,22 +425,23 @@ const ApiSidebar: React.FC<Props> = ({
                       dataSource={history}
                       renderItem={item => (
                         <List.Item
-                          style={{ cursor: "pointer", padding: "6px 4px" }}
+                          className="ql-hover-row"
+                          style={{ cursor: "pointer", padding: "6px 6px" }}
                           onClick={() => onLoadHistory(item)}
                         >
                           <div style={{ width: "100%" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
-                              <Tag color={METHOD_COLORS[item.method]} style={{ fontSize: 10, lineHeight: "14px", padding: "0 3px", margin: 0 }}>
+                              <Tag color={METHOD_COLORS[item.method]} style={{ fontSize: 11, lineHeight: "16px", padding: "0 4px", margin: 0 }}>
                                 {item.method}
                               </Tag>
-                              <Tag color={getStatusColor(item.statusCode)} style={{ fontSize: 10, lineHeight: "14px", padding: "0 3px", margin: 0 }}>
+                              <Tag color={getStatusColor(item.statusCode)} style={{ fontSize: 11, lineHeight: "16px", padding: "0 4px", margin: 0 }}>
                                 {item.statusCode || "ERR"}
                               </Tag>
-                              <Text type="secondary" style={{ fontSize: 10, marginLeft: "auto" }}>
+                              <Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
                                 {item.duration}ms
                               </Text>
                             </div>
-                            <Text ellipsis style={{ fontSize: 11, width: "100%", display: "block" }}>
+                            <Text ellipsis style={{ fontSize: 12, width: "100%", display: "block" }}>
                               {item.url}
                             </Text>
                           </div>

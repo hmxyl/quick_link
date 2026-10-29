@@ -206,11 +206,12 @@ const EnvironmentModal: React.FC<Props> = ({
             dataSource={environments}
             renderItem={env => (
               <List.Item
+                className="ql-hover-row"
                 style={{
                   cursor: "pointer",
-                  padding: "8px",
+                  padding: "8px 8px",
                   background: selectedId === env._id ? token.colorPrimaryBg : "transparent",
-                  borderRadius: 4,
+                  borderRadius: 6,
                 }}
                 onClick={() => setSelectedId(env._id)}
                 actions={[
@@ -227,7 +228,7 @@ const EnvironmentModal: React.FC<Props> = ({
                 <List.Item.Meta
                   title={
                     <Space>
-                      {env._id === activeEnvId && <CheckCircleOutlined style={{ color: "#52c41a" }} />}
+                      {env._id === activeEnvId && <CheckCircleOutlined style={{ color: token.colorSuccess }} />}
                       <Text ellipsis style={{ maxWidth: 100 }}>{env.name}</Text>
                     </Space>
                   }

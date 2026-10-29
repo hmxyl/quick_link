@@ -1065,12 +1065,12 @@ const NoteViewer: React.FC<Props> = ({
               </Text>
               {editing && (
                 <Tooltip title="插入到正文">
-                  <LinkOutlined style={{ cursor: "pointer", color: "#1677ff" }} onClick={() => insertLink(a)} />
+                  <LinkOutlined style={{ cursor: "pointer", color: token.colorPrimary }} onClick={() => insertLink(a)} />
                 </Tooltip>
               )}
               <Tooltip title="下载">
                 <DownloadOutlined
-                  style={{ cursor: "pointer", color: "#1677ff" }}
+                  style={{ cursor: "pointer", color: token.colorPrimary }}
                   onClick={() => attachmentApi.download(a._id, a.originalName)}
                 />
               </Tooltip>
@@ -1082,7 +1082,7 @@ const NoteViewer: React.FC<Props> = ({
                   onAttachmentsChanged();
                 }}
               >
-                <DeleteOutlined style={{ cursor: "pointer", color: "#ff4d4f" }} />
+                <DeleteOutlined style={{ cursor: "pointer", color: token.colorError }} />
               </Popconfirm>
             </Tag>
           ))}

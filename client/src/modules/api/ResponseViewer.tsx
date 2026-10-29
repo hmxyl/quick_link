@@ -104,7 +104,7 @@ const ResponseViewer: React.FC<Props> = ({ response, loading }) => {
                     whiteSpace: "pre-wrap",
                     wordBreak: "break-all",
                     background: token.colorFillQuaternary,
-                    borderRadius: 4,
+                    borderRadius: 8,
                     maxHeight: "calc(100vh - 500px)",
                     overflow: "auto",
                   }}

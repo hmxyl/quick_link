@@ -16,20 +16,24 @@ import type { Link, Tag as TagType, AccountSecrets, PresetColor } from "../../ty
 const { Text } = Typography;
 
 // 链接卡片悬浮 CSS (模块级一次性注入, 避免每次渲染创建新 style 标签)
-// 操作栏与链接信息同一行: 作为信息行末尾的常规 flex 项永久保留自身空间
-// (visibility:hidden 不改变布局), 与图标/标题/钥匙图标互不重叠, 悬浮淡入
-// 绝不遮挡链接信息、不引起任何布局跳动; 不悬浮时不可点击。
+// 操作栏与链接信息同一行, 采用「抽屉」式: 不悬浮时 max-width:0 + overflow:hidden
+// 完全收起 (标题占满行宽, 卡片无空置区域), 悬浮时展开到自身自然宽度——flex 布局
+// 同步压缩标题省略号, 因此不遮挡链接信息、收起时不可点击; 位置与宽度随过渡平滑
+// 动画 (max-width 动画, 免去逐卡实测). 删除 Popconfirm 弹出期间挂 .link-card-pinned
+// 保持展开, 鼠标移到弹层 (body 门户) 也不会收起错位。
 // .link-card-dark: 用户设置深色背景色时切换浅色文字与按钮, 保证 WCAG 可读性
 // (antd v5 组件规则用 :where() 包裹, 特异性为 0, 这里的普通选择器必然覆盖成功)。
 const LINK_CARD_CSS = `
   .link-card-actions {
+    max-width: 0;
+    overflow: hidden;
     opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0.2s ease;
+    transition: max-width 0.2s ease, opacity 0.2s ease;
   }
-  .ant-card-hoverable:hover .link-card-actions {
+  .ant-card-hoverable:hover .link-card-actions,
+  .link-card-pinned .link-card-actions {
+    max-width: 160px;
     opacity: 1 !important;
-    visibility: visible;
   }
   .ant-card-hoverable.link-card {
     transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease, background-color 0.25s ease;
@@ -104,6 +108,9 @@ interface LinkSettingsProps {
   onAddToIconLibrary: (link: Link) => void;
   onEdit: (link: Link) => void;
   onDelete: (id: string) => void;
+  // 删除确认弹层开合回调: 弹出期间由外层挂 .link-card-pinned 保持操作栏展开,
+  // 鼠标移向弹层 (渲染在 body) 时操作栏不收起, 弹层锚点不漂移
+  onPopoverChange?: (open: boolean) => void;
 }
 
 const LinkSettings: React.FC<LinkSettingsProps> = ({
@@ -114,11 +121,13 @@ const LinkSettings: React.FC<LinkSettingsProps> = ({
   onAddToIconLibrary,
   onEdit,
   onDelete,
+  onPopoverChange,
 }) => {
   const hasUrlIcon = link.icon && /^https?:\/\//i.test(link.icon);
   const isInLibrary = hasUrlIcon && customIcons.some((c) => c.url === link.icon);
   return (
-    <Space size={4} wrap>
+    // 不设 wrap: 抽屉展开动画期间按钮保持单行 (换行会导致收起时高度堆叠)
+    <Space size={4}>
       {link.url && (
         <Tooltip title="复制并打开">
           <Button size="small" type="text" icon={<ExportOutlined />} onClick={(e) => { e.stopPropagation(); onCopyAndOpen(link.url); }} />
@@ -135,7 +144,11 @@ const LinkSettings: React.FC<LinkSettingsProps> = ({
       <Tooltip title="编辑">
         <Button size="small" type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEdit(link); }} />
       </Tooltip>
-      <Popconfirm title="确定删除此链接？" onConfirm={(e) => { e?.stopPropagation(); onDelete(link._id); }}>
+      <Popconfirm
+        title="确定删除此链接？"
+        onConfirm={(e) => { e?.stopPropagation(); onDelete(link._id); }}
+        onOpenChange={(open) => onPopoverChange?.(open)}
+      >
         <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
       </Popconfirm>
     </Space>
@@ -158,6 +171,8 @@ const LinksPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [colorManagerOpen, setColorManagerOpen] = useState(false);
+  // 删除确认弹层展开的卡片 id: 弹层期间挂 .link-card-pinned 保持操作栏展开
+  const [pinnedLinkId, setPinnedLinkId] = useState<string | null>(null);
   const [editingLink, setEditingLink] = useState<Link | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -650,8 +665,16 @@ const LinksPage: React.FC = () => {
                     key={link._id}
                     size="small"
                     hoverable
-                    className={`link-card${bgDark ? " link-card-dark" : ""}`}
-                    onClick={() => openLink(link)}
+                    className={`link-card${bgDark ? " link-card-dark" : ""}${
+                      pinnedLinkId === link._id ? " link-card-pinned" : ""
+                    }`}
+                    onClick={(e) => {
+                      // 仅当点击确实落在卡片自身 DOM 内才打开链接: Popconfirm/Modal
+                      // 等弹层 portal 到 body, 其点击会沿 React 树冒泡到卡片的
+                      // onClick, 但 e.target 在卡片之外——必须排除 (否则点删除确
+                      // 认弹层的「取消」等会误开链接新标签页)
+                      if (e.target instanceof Node && e.currentTarget.contains(e.target)) openLink(link);
+                    }}
                     style={{
                       cursor: link.url ? "pointer" : "default",
                       background: link.backgroundColor || undefined,
@@ -661,11 +684,10 @@ const LinksPage: React.FC = () => {
                     }}
                     styles={{ body: { padding: "10px 16px" } }}
                   >
-                    {/* 链接信息 + 同行悬浮操作栏:
-                        操作栏为信息行末尾的常规 flex 项 (同一行), 永久保留自身空间
-                        (visibility:hidden 不改变布局), 与图标/标题/钥匙图标天然不
-                        重叠——悬浮淡入显示时绝不遮挡链接信息, 也不引起任何布局跳动;
-                        卡片过窄时操作栏按钮换行 (Space wrap) 而非挤压标题 */}
+                    {/* 链接信息 + 同行悬浮操作栏 (抽屉式):
+                        不悬浮时操作栏 max-width:0 完全收起——标题占满行宽, 卡片无
+                        空置区域; 悬浮时展开到自然宽度, 标题同步收缩省略, 不悬浮时
+                        收起状态下按钮被裁剪不可点击 */}
                     <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                       <LinkIcon icon={link.icon} url={link.url} />
                       <Text
@@ -692,6 +714,7 @@ const LinksPage: React.FC = () => {
                           onAddToIconLibrary={handleAddToIconLibrary}
                           onEdit={handleEdit}
                           onDelete={handleDelete}
+                          onPopoverChange={(open) => setPinnedLinkId(open ? link._id : null)}
                         />
                       </div>
                     </div>
@@ -779,7 +802,6 @@ const LinksPage: React.FC = () => {
                       borderRadius: "50%",
                       cursor: "pointer",
                       padding: 0,
-                      outline: "none",
                       border: `1px dashed ${token.colorTextQuaternary}`,
                       background: `linear-gradient(135deg, transparent 44%, ${token.colorTextTertiary} 44%, ${token.colorTextTertiary} 56%, transparent 56%)`,
                       boxShadow: currentBgHex == null ? `0 0 0 2px ${token.colorBgContainer}, 0 0 0 4px ${token.colorPrimary}` : undefined,
@@ -799,10 +821,10 @@ const LinksPage: React.FC = () => {
                           height: 20,
                           borderRadius: "50%",
                           background: p.color,
-                          border: "1px solid rgba(0,0,0,0.14)",
+                          // 描边走 token: 浅/深色下都可见 (硬编码黑色半透明在深色主题下不可见)
+                          border: `1px solid ${token.colorBorder}`,
                           cursor: "pointer",
                           padding: 0,
-                          outline: "none",
                           boxShadow: selected ? `0 0 0 2px ${token.colorBgContainer}, 0 0 0 4px ${token.colorPrimary}` : undefined,
                         }}
                       />

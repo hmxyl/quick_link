@@ -2,10 +2,23 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { Button, Input, Select, Space, Switch, Tabs } from "antd";
 import { PlusOutlined, DeleteOutlined, CopyOutlined, FormatPainterOutlined, ImportOutlined } from "@ant-design/icons";
 import type { KeyValueEntry } from "../../types";
+import { useThemeStore } from "../../stores/themeStore";
 
 const { TextArea } = Input;
 
 const METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+
+// HTTP 方法动词配色 (选中值与下拉项共用): 浅色主题用 antd 7 级深阶保证白底对比,
+// 深色主题用 5 级亮阶保证暗底对比, 与左侧树的方法 Tag 色系一致
+const METHOD_TEXT_COLORS: Record<string, { light: string; dark: string }> = {
+  GET: { light: "#389e0d", dark: "#95de64" },
+  POST: { light: "#d46b08", dark: "#ffc069" },
+  PUT: { light: "#0958d9", dark: "#69b1ff" },
+  DELETE: { light: "#cf1322", dark: "#ff7875" },
+  PATCH: { light: "#531dab", dark: "#b37feb" },
+  HEAD: { light: "#08979c", dark: "#5cdbd3" },
+  OPTIONS: { light: "#c41d7f", dark: "#ff85c0" },
+};
 
 interface Props {
   requestName: string;
@@ -89,6 +102,8 @@ const RequestBuilder: React.FC<Props> = ({
   onRequestNameChange, onMethodChange, onUrlChange, onHeadersChange, onQueryParamsChange, onCookiesChange,
   onBodyTypeChange, onBodyChange, onAuthTypeChange, onAuthConfigChange, onSend, onCopyCurl, onImportCurl,
 }) => {
+  // 方法动词配色随主题切深浅阶
+  const isDark = useThemeStore((s) => s.isDark);
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -126,8 +141,11 @@ const RequestBuilder: React.FC<Props> = ({
         <Select
           value={method}
           onChange={onMethodChange}
-          style={{ width: 110 }}
-          options={METHODS.map(m => ({ value: m, label: m }))}
+          style={{ width: 110, fontWeight: 600 }}
+          options={METHODS.map(m => ({
+            value: m,
+            label: <span style={{ color: (METHOD_TEXT_COLORS[m] || {})[isDark ? "dark" : "light"], fontWeight: 600 }}>{m}</span>,
+          }))}
           variant="filled"
         />
         <Input

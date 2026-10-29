@@ -16,7 +16,7 @@
 
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
-| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数，标签管理可一键统一全部分组列数）、链接卡片背景色（逐链接设置/清除，可从预设色板选取或取色器自定义，预设背景色独立管理）、悬浮操作栏与链接信息同一行（常规占位永久保留空间，悬浮显示时不遮挡链接信息、零布局跳动）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标、标签、预设背景色与链接背景色）、标签管理弹窗（含每行链接数配置、统一设置、↑/↓ 排序，链接展示顺序与标签排序一致）、背景色管理弹窗、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
+| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数，标签管理可一键统一全部分组列数）、链接卡片背景色（逐链接设置/清除，可从预设色板选取或取色器自定义，预设背景色独立管理）、悬浮操作栏与链接信息同一行（抽屉式：不悬浮完全收起、标题占满行宽无空置，悬浮展开标题省略让位不遮挡；删除确认弹层期间操作栏钉住展开）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标、标签、预设背景色与链接背景色）、标签管理弹窗（含每行链接数配置、统一设置、↑/↓ 排序，链接展示顺序与标签排序一致）、背景色管理弹窗、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
 | 笔记管理 | 文件夹树（真实文件目录树存储，展开即显示目录下全部文件与子文件夹，文件名含扩展名，非 Markdown 文件单击交系统默认程序打开；左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键复制文件路径（打开于 Typora / 资源管理器仅非服务模式可用，见 §9.5；Typora 支持自定义安装路径）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
 | 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理（键盘方向键导航）、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth，JSON 一键格式化，可编辑接口名称）、响应查看（状态码/耗时/Body/Headers，JSON 格式化/原始切换）、请求历史记录（点击恢复含响应结果）、集合导出/导入（原生格式 + Postman Collection v2.1 双向兼容）、环境 Postman 格式导入/导出、拷贝为 cURL、导入 cURL | [API.md](./API.md) |
@@ -63,7 +63,7 @@ quick_link/
 │   │   ├── hooks/              # usePageVisibility (CachedPages 页面可见性 Context + hook)
 │   │   ├── stores/authStore.ts # Zustand 认证态; themeStore.ts # 外观主题 (跟随系统/浅/深); capabilityStore.ts # 服务端能力探测 (session 0 下隐藏桌面专属入口)
 │   │   ├── styles/markdown.css # Markdown 预览样式 + 深色模式覆盖
-│   │   ├── styles/global.css   # 全局基线: 细滚动条 / 主题切换平滑过渡 / prefers-reduced-motion 适配
+│   │   ├── styles/global.css   # 全局基线: 细滚动条 / 列表行悬浮反馈 / 主题切换平滑过渡 / prefers-reduced-motion 适配
 │   │   ├── types/              # 共享类型定义
 │   │   ├── App.tsx             # 路由 (BrowserRouter, zhCN) + CachedPages 页面缓存
 │   │   └── main.tsx
@@ -227,7 +227,7 @@ npm run migrate:status    # 查看状态
 ### 8.2 布局与通用
 
 - 侧栏底部依次为：设置按钮、收起/展开按钮（`localStorage quicklink:siderCollapsed` 记忆）；账号信息（用户名/注册邮箱）与退出登录均位于设置弹窗内（见 [USER.md §5](./USER.md)）。
-- 全局视觉基线（2026-10 整体优化）：antd token 统一 `borderRadius 8` / 容器 `borderRadiusLG 12`；`styles/global.css`（main.tsx 引入）提供细滚动条、主题切换平滑过渡与 `prefers-reduced-motion` 适配；`BrandMark`（蓝青渐变圆角方块 + 链接图标）作为登录/注册页与侧栏共用的品牌标识（设置弹窗头像同渐变）；内容卡片为 12px 圆角 + 1px `colorBorderSecondary` 描边；登录/注册页为渐变背景（深色主题为暗底 + 品牌色光晕）；笔记/接口等模块面板描边与提示色全部 token 化（修复深色主题下硬编码 `#f0f0f0`/`#888` 发亮的问题）；Modal 统一 `destroyOnHidden`。各页面细节见对应模块文档（链接页见 [LINKS.md §5](./LINKS.md)）。
+- 全局视觉基线（2026-10 整体优化，三轮）：antd token 统一 `borderRadius 8` / 容器 `borderRadiusLG 12`；`styles/global.css`（main.tsx 引入）提供细滚动条、`.ql-hover-row` 可点击列表行悬浮反馈（中性半透明色深浅主题通用）、主题切换平滑过渡与 `prefers-reduced-motion` 适配；`BrandMark`（蓝青渐变圆角方块 + 链接图标）作为登录/注册页与侧栏共用的品牌标识（设置弹窗头像同渐变）；内容卡片为 12px 圆角 + 1px `colorBorderSecondary` 描边；登录/注册页为渐变背景（深色主题为暗底 + 品牌色光晕）；页面底色对齐 antd5 `colorBgLayout`（浅 `#f5f5f5` / 深 `#000`）；笔记/接口等模块面板描边与提示色全部 token 化（先后修复深色主题下硬编码 `#f0f0f0`/`#888`/`#52c41a`/`#1677ff`/`#ff4d4f` 及色板黑色半透明描边不可见的问题）；接口管理 URL 栏的 HTTP 方法下拉按动词着色（浅色 7 级/深色 5 级双套色阶，与树节点方法 Tag 同色系）、历史与环境列表行带悬浮反馈、图标按钮补 tooltip；Modal 统一 `destroyOnHidden`。各页面细节见对应模块文档（链接页见 [LINKS.md §5](./LINKS.md)）。
 - 外观主题：设置弹窗选 跟随系统/浅色/深色（默认跟随系统，`prefers-color-scheme` 变化实时切换）；App 据 `isDark` 切换 antd `darkAlgorithm` 并同步 `html[data-theme]`/`color-scheme`/body 背景；自定义样式（markdown 预览、Milkdown Crepe 变量）经 `html[data-theme="dark"]` 覆盖；业务组件一律用 `theme.useToken()` 取色，禁写死浅色值。
 - 全局字体：设置弹窗可选预设字体（IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体）或自定义输入；选中后写入 `AppSettings.fontFamily`（`localStorage quicklink:settings`），App 将其应用到 `document.body.style.fontFamily`、antd `ConfigProvider` token 及 CSS 变量 `--ql-font-family`（供子组件如接口管理代码区继承）；设置页修改后通过自定义事件 `quicklink:settings-changed` 在同标签页内实时同步，无需刷新。
 - 请求拦截：自动附加 `Authorization: Bearer`；开发环境 Vite proxy `/api` → `localhost:3000`；服务端错误文案统一简体中文。

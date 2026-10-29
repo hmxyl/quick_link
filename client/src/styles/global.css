@@ -33,6 +33,16 @@ body,
   background: transparent;
 }
 
+/* 可点击列表行的悬浮反馈 (接口历史/环境列表等 antd List.Item 不自带 hover 态):
+ * 中性半透明色深浅主题下均可读, 与滚动条同色系 */
+.ql-hover-row {
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+.ql-hover-row:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
 /* 尊重系统"减少动态效果"偏好: 关闭动画与过渡 (含 antd 组件动效) */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -102,7 +102,8 @@ const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
     document.documentElement.style.colorScheme = isDark ? "dark" : "light";
-    document.body.style.backgroundColor = isDark ? "#000" : "#f0f2f5";
+    // 对齐 antd5 colorBgLayout: 浅色 #f5f5f5 / 深色 #000 (原 #f0f2f5 是 antd4 旧底色, 与组件体系有色差)
+    document.body.style.backgroundColor = isDark ? "#000" : "#f5f5f5";
   }, [isDark]);
   const resolvedFont = fontFamily
     ? `${fontFamily}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
