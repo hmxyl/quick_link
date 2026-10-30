@@ -16,7 +16,7 @@
 
 | 模块 | 功能概览 | 详见 |
 | ---- | -------- | ---- |
-| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数，标签管理可一键统一全部分组列数）、链接卡片背景色（逐链接设置/清除，可从预设色板选取或取色器自定义，预设背景色独立管理）、悬浮操作栏与链接信息同一行（抽屉式：不悬浮完全收起、标题占满行宽无空置，悬浮展开标题省略让位不遮挡；删除确认弹层期间操作栏钉住展开）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导出含自定义图标、标签、预设背景色与链接背景色）、标签管理弹窗（含每行链接数配置、统一设置、↑/↓ 排序，链接展示顺序与标签排序一致）、背景色管理弹窗、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
+| 链接管理 | 标签分组卡片展示（每标签可配置每行链接数，标签管理可一键统一全部分组列数）、链接卡片背景色（逐链接设置/清除，可从预设色板选取或取色器自定义，预设背景色独立管理）、悬浮操作栏与链接信息同一行（抽屉式：不悬浮完全收起、标题占满行宽无空置，悬浮展开标题省略让位不遮挡；删除确认弹层期间操作栏钉住展开）、搜索（防抖 300ms 前端过滤）、CRUD、本地文件 `file:///` 支持、关联账号密码（支持一个链接多个账号，明文存储直接查看，密码一键生成，支持编辑）、URL 去重提示、数据清空/导出/导入（JSON/CSV，导入按 URL 归一去重，导出含自定义图标、标签、预设背景色与链接背景色）、标签管理弹窗（含每行链接数配置、统一设置、↑/↓ 排序，链接展示顺序与标签排序一致）、背景色管理弹窗、复制并在新标签页打开（`file://` 链接降级为复制本地路径，见 §9.5） | [LINKS.md](./LINKS.md) |
 | 笔记管理 | 文件夹树（真实文件目录树存储，展开即显示目录下全部文件与子文件夹，文件名含扩展名，非 Markdown 文件单击交系统默认程序打开；左面板可收起/展开并记忆，拖拽自定义排序/跨文件夹移动）、标题+内容搜索、键盘方向键导航、右键菜单/「+」按钮新建、Markdown 双模式编辑（所见即所得 / 源码+预览分栏，编辑模式停止输入 1.5 秒自动保存）、大纲侧边栏（预览模式自动提取标题层级，点击跳转）、笔记内搜索与替换（Ctrl+F，编辑模式支持替换）、预览区链接系统浏览器打开、右键复制文件路径（打开于 Typora / 资源管理器仅非服务模式可用，见 §9.5；Typora 支持自定义安装路径）、回收站、附件管理、zip 导入/导出 | [NOTES.md](./NOTES.md) |
 | 用户信息管理 | 注册/登录（记住密码/自动登录）、登录密码（bcryptjs）；登录密码可凭注册邮箱找回 | [USER.md](./USER.md) |
 | 接口管理 | 模仿 Postman 的本地接口管理：环境配置与切换（`{{变量}}` 自动替换）、集合/文件夹/请求三级树形管理（键盘方向键导航）、HTTP 请求发送（7 种方法/Params/Headers/Cookies/Body/Auth，JSON 一键格式化，可编辑接口名称）、响应查看（状态码/耗时/Body/Headers，JSON 格式化/原始切换）、请求历史记录（点击恢复含响应结果）、集合导出/导入（原生格式 + Postman Collection v2.1 双向兼容）、环境 Postman 格式导入/导出、拷贝为 cURL、导入 cURL | [API.md](./API.md) |
@@ -227,7 +227,7 @@ npm run migrate:status    # 查看状态
 ### 8.2 布局与通用
 
 - 侧栏底部依次为：设置按钮、收起/展开按钮（`localStorage quicklink:siderCollapsed` 记忆）；账号信息（用户名/注册邮箱）与退出登录均位于设置弹窗内（见 [USER.md §5](./USER.md)）。
-- 全局视觉基线（2026-10 整体优化，三轮）：antd token 统一 `borderRadius 8` / 容器 `borderRadiusLG 12`；`styles/global.css`（main.tsx 引入）提供细滚动条、`.ql-hover-row` 可点击列表行悬浮反馈（中性半透明色深浅主题通用）、主题切换平滑过渡与 `prefers-reduced-motion` 适配；`BrandMark`（蓝青渐变圆角方块 + 链接图标）作为登录/注册页与侧栏共用的品牌标识（设置弹窗头像同渐变）；内容卡片为 12px 圆角 + 1px `colorBorderSecondary` 描边；登录/注册页为渐变背景（深色主题为暗底 + 品牌色光晕）；页面底色对齐 antd5 `colorBgLayout`（浅 `#f5f5f5` / 深 `#000`）；笔记/接口等模块面板描边与提示色全部 token 化（先后修复深色主题下硬编码 `#f0f0f0`/`#888`/`#52c41a`/`#1677ff`/`#ff4d4f` 及色板黑色半透明描边不可见的问题）；接口管理 URL 栏的 HTTP 方法下拉按动词着色（浅色 7 级/深色 5 级双套色阶，与树节点方法 Tag 同色系）、历史与环境列表行带悬浮反馈、图标按钮补 tooltip；Modal 统一 `destroyOnHidden`。各页面细节见对应模块文档（链接页见 [LINKS.md §5](./LINKS.md)）。
+- 全局视觉基线（2026-10 整体优化，三轮）：antd token 统一 `borderRadius 8` / 容器 `borderRadiusLG 12`；`styles/global.css`（main.tsx 引入）提供细滚动条、`.ql-hover-row` 可点击列表行悬浮反馈（中性半透明色深浅主题通用）、主题切换平滑过渡与 `prefers-reduced-motion` 适配（仅停用本项目自有的装饰性过渡，不覆盖 antd 组件动效，原因见 §13.4）；`BrandMark`（蓝青渐变圆角方块 + 链接图标）作为登录/注册页与侧栏共用的品牌标识（设置弹窗头像同渐变）；内容卡片为 12px 圆角 + 1px `colorBorderSecondary` 描边；登录/注册页为渐变背景（深色主题为暗底 + 品牌色光晕）；页面底色对齐 antd5 `colorBgLayout`（浅 `#f5f5f5` / 深 `#000`）；笔记/接口等模块面板描边与提示色全部 token 化（先后修复深色主题下硬编码 `#f0f0f0`/`#888`/`#52c41a`/`#1677ff`/`#ff4d4f` 及色板黑色半透明描边不可见的问题）；接口管理 URL 栏的 HTTP 方法下拉按动词着色（浅色 7 级/深色 5 级双套色阶，与树节点方法 Tag 同色系）、历史与环境列表行带悬浮反馈、图标按钮补 tooltip；Modal 统一 `destroyOnHidden`。各页面细节见对应模块文档（链接页见 [LINKS.md §5](./LINKS.md)）。
 - 外观主题：设置弹窗选 跟随系统/浅色/深色（默认跟随系统，`prefers-color-scheme` 变化实时切换）；App 据 `isDark` 切换 antd `darkAlgorithm` 并同步 `html[data-theme]`/`color-scheme`/body 背景；自定义样式（markdown 预览、Milkdown Crepe 变量）经 `html[data-theme="dark"]` 覆盖；业务组件一律用 `theme.useToken()` 取色，禁写死浅色值。
 - 全局字体：设置弹窗可选预设字体（IBM Plex Mono / Courier New / Consolas / Menlo / Monaco / 系统默认 / 等宽字体）或自定义输入；选中后写入 `AppSettings.fontFamily`（`localStorage quicklink:settings`），App 将其应用到 `document.body.style.fontFamily`、antd `ConfigProvider` token 及 CSS 变量 `--ql-font-family`（供子组件如接口管理代码区继承）；设置页修改后通过自定义事件 `quicklink:settings-changed` 在同标签页内实时同步，无需刷新。
 - 请求拦截：自动附加 `Authorization: Bearer`；开发环境 Vite proxy `/api` → `localhost:3000`；服务端错误文案统一简体中文。
@@ -495,3 +495,11 @@ Windows 服务运行在 session 0，与用户桌面隔离，服务端 `spawn` �
 ### 13.3 安装包签名与安全策略（2026-08 记录，2026-10 更新）
 
 NSIS 安装包未签名，在部分机器上会被 Windows 应用程序控制策略 / SmartScreen 拦截（启动即拒绝，无法放行）。Electron 期曾以 `portable` 与 `zip` 免安装格式绕行；服务版**无法沿用该绕行**——注册 SCM 服务本身就需要管理员权限与安装器，不存在"解压即用"的等价形态。当前缓解手段是安装包仅约 24MB、内含二进制全部 SHA256 锁定（§9.6）；被拦截时需由管理员放行，长期方案仍是购买代码签名证书。
+
+### 13.4 reduced-motion 适配不得覆盖 antd 动效机制（2026-10-30）
+
+`global.css` 最初按通用片段实现"尊重系统减少动态效果"：`@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important } }`。该写法会**击穿 antd 弹层**：Popconfirm / Tooltip / Dropdown 的显隐由 rc-motion 监听 `animationend` 驱动，而监听器是在下一帧挂上的——0.01ms 的动画在此之前即已结束，事件永久丢失，弹层停在 `ant-popover-hidden`（`display: none`）。表象为"点击清空按钮，确认框一闪而过 / 根本不显示"，且只在**系统关闭动效**的机器上出现（Windows「设置 → 辅助功能 → 视觉效果 → 动画效果」关闭时，Chrome 即上报 `prefers-reduced-motion: reduce`），开发机不易察觉。
+
+现行实现把媒体查询内的规则**收窄到自有装饰性过渡**（主题切换的 `body`/`.ant-layout*`/`.ant-card` 背景与描边过渡、`.ql-hover-row` 悬浮过渡、`html` 的 `scroll-behavior`），不再对 `*` 强制动画时长，antd 组件动效保持原样。取舍是：系统关闭动效时 antd 的 0.1~0.2s 淡入淡出仍然播放——组件动效属于功能反馈而非装饰，且其显隐依赖动画事件，全局停用弊大于利。
+
+排查方法留档：该媒体查询在常规浏览器环境难以命中，可在控制台注入同款 `* { animation-duration: 0.01ms !important }` 规则复现，再对 `.ant-popover` 采样 `display` / `ant-popover-hidden` 确认（本项目未引入 `antd/dist/reset.css`，若引入需一并核查其自带的全局 reduced-motion 块）。

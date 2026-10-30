@@ -53,7 +53,7 @@
 
 ## 5. 前端交互
 
-- **全局视觉基线（2026-10）**：antd 主题统一 `borderRadius 8` / 容器 12；`styles/global.css` 提供细滚动条、主题切换平滑过渡与 `prefers-reduced-motion` 适配（系统关闭动效时停用全部动画）；登录页与侧栏共用 `BrandMark`（蓝青渐变圆角方块 + 链接图标）品牌标识，注册页同视觉语言；各模块面板描边/提示色一律走 antd token（深色主题正确适配，历史硬编码色已清理）；Modal 统一用 `destroyOnHidden`（`destroyOnClose` 已弃用）。
+- **全局视觉基线（2026-10）**：antd 主题统一 `borderRadius 8` / 容器 12；`styles/global.css` 提供细滚动条、主题切换平滑过渡与 `prefers-reduced-motion` 适配（系统关闭动效时停用自有的主题切换/悬浮过渡，不覆盖 antd 组件动效，见 [BUILD.md §13.4](./BUILD.md)）；登录页与侧栏共用 `BrandMark`（蓝青渐变圆角方块 + 链接图标）品牌标识，注册页同视觉语言；各模块面板描边/提示色一律走 antd token（深色主题正确适配，历史硬编码色已清理）；Modal 统一用 `destroyOnHidden`（`destroyOnClose` 已弃用）。
 - **登录页**：品牌标识 + 副标题（「链接 · 笔记 · 接口，一站式个人知识库」）+ 渐变背景（浅色淡蓝渐变 / 深色暗底 + 品牌色光晕），用户名+密码（带 `autocomplete` 供浏览器自动填充），提供记住密码/自动登录勾选与「忘记密码」（凭用户名+注册邮箱重置）。
 - **注册页**：与登录页同一视觉（BrandMark、渐变背景、卡片），用户名/邮箱/密码/确认密码，带 `autocomplete`（`username` / `email` / `new-password`）。
 - **记住密码/自动登录**：纯客户端能力，凭据 base64 轻度混淆存 `localStorage[quicklink:savedCredentials]`；自动登录仅启动且无 token 时静默尝试一次；与设置弹窗开关联动。

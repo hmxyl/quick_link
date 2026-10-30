@@ -43,14 +43,21 @@ body,
   background: rgba(128, 128, 128, 0.12);
 }
 
-/* 尊重系统"减少动态效果"偏好: 关闭动画与过渡 (含 antd 组件动效) */
+/* 尊重系统"减少动态效果"偏好: 只停用本项目自有的装饰性过渡。
+ * 切勿对 `*` 强制 animation-duration/transition-duration——antd 弹层 (Popconfirm/
+ * Tooltip/Dropdown) 的显隐由 rc-motion 监听动画结束事件驱动, 0.01ms 动画在其挂上
+ * animationend 监听之前即已结束, 事件丢失使弹层停在 ant-popover-hidden (display:none),
+ * 表象为"点清空, 确认框一闪而过" (2026-10-30: Windows 关闭"动画效果"的用户命中此媒体查询)。 */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  body,
+  .ant-layout,
+  .ant-layout-sider,
+  .ant-layout-content,
+  .ant-card,
+  .ql-hover-row {
+    transition: none !important;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }

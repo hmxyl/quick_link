@@ -664,24 +664,51 @@ export async function batchImport(req: AuthRequest, res: Response): Promise<void
       }
     }
 
-    // 导入链接 (包含 icon/backgroundColor 字段)
-    const docs = importLinks.map((item: any) => ({
-      _id: uuidv4(),
-      userId: req.userId,
-      url: item.url || "",
-      title: item.title || item.url || "",
-      description: item.description,
-      icon: item.icon || undefined,
-      backgroundColor: sanitizeBackgroundColor(item.backgroundColor),
-      tag: item.tag || (Array.isArray(item.tags) && item.tags.length > 0 ? item.tags[0] : "其他"),
-      isFavorite: item.isFavorite || false,
-      isArchived: item.isArchived || false,
-      clickCount: item.clickCount || 0,
-      hasAccount: false,
-      accounts: [],
-      createdAt: now,
-      updatedAt: now,
-    }));
+    // 导入链接 (按 URL 去重): 与添加时的去重提示同口径, URL 经 normalizeUrl 归一后比较——
+    // 库中已有同 URL 的跳过 (存量 URL 也归一后比较, 兼容早期导入的未归一数据),
+    // 同一文件内重复的 URL 只保留首条; 空 URL 不参与去重 (无地址条目允许并存)。
+    // 存储同样写入归一化 URL, 与创建接口 (create) 保持一致。
+    const existingLinks: Link[] = await new Promise((resolve, reject) => {
+      db.links.find({ userId: req.userId }).exec((err, docs) => {
+        if (err) reject(err);
+        else resolve(docs as Link[]);
+      });
+    });
+    const existingUrls = new Set<string>();
+    for (const l of existingLinks) {
+      if (l.url) existingUrls.add(normalizeUrl(l.url));
+    }
+    const seenUrls = new Set<string>();
+    let skipped = 0;
+    const docs: any[] = [];
+    for (const item of importLinks) {
+      const rawUrl = String(item?.url || "").trim();
+      const url = rawUrl ? normalizeUrl(rawUrl) : "";
+      if (rawUrl) {
+        if (existingUrls.has(url) || seenUrls.has(url)) {
+          skipped++;
+          continue;
+        }
+        seenUrls.add(url);
+      }
+      docs.push({
+        _id: uuidv4(),
+        userId: req.userId,
+        url,
+        title: item.title || url,
+        description: item.description,
+        icon: item.icon || undefined,
+        backgroundColor: sanitizeBackgroundColor(item.backgroundColor),
+        tag: item.tag || (Array.isArray(item.tags) && item.tags.length > 0 ? item.tags[0] : "其他"),
+        isFavorite: item.isFavorite || false,
+        isArchived: item.isArchived || false,
+        clickCount: item.clickCount || 0,
+        hasAccount: false,
+        accounts: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
     const inserted: number = await new Promise((resolve, reject) => {
       db.links.insert(docs as any, (err, newDocs) => {
@@ -691,10 +718,11 @@ export async function batchImport(req: AuthRequest, res: Response): Promise<void
     });
 
     const parts = [`${inserted} 条链接`];
+    if (skipped > 0) parts.push(`跳过 ${skipped} 条重复链接`);
     if (iconCount > 0) parts.push(`${iconCount} 个图标`);
     if (tagCount > 0) parts.push(`${tagCount} 个标签`);
     if (colorCount > 0) parts.push(`${colorCount} 个预设背景色`);
-    res.status(201).json({ success: true, message: `已导入 ${parts.join("、")}`, data: { count: inserted, iconCount, tagCount, colorCount } });
+    res.status(201).json({ success: true, message: `已导入 ${parts.join("、")}`, data: { count: inserted, skipped, iconCount, tagCount, colorCount } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
