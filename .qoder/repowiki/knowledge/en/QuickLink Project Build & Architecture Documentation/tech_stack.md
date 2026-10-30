@@ -1,1 +1,0 @@
-React 18 + TypeScript + Vite + Ant Design 5 (frontend); Node.js + Express + TypeScript + Mongoose + migrate-mongo (backend); MongoDB 7; JWT authentication; AES-256-GCM + bcrypt for sensitive data; Docker Compose for local orchestration; Vitest (frontend) and Jest (backend) for testing.

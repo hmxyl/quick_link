@@ -453,7 +453,7 @@ const LinksPage: React.FC = () => {
       message.success(res.message || "数据已清空");
       loadAllLinks();
     } catch (err: any) {
-      // 透出服务端真实错误 (限流/鉴权/服务端异常), 便于定位而不是笼统的"清空失败"
+      // 透出服务端真实错误 (鉴权/服务端异常), 便于定位而不是笼统的"清空失败"
       message.error(err?.response?.data?.error || "清空失败");
     }
   };
