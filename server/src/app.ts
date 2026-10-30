@@ -29,10 +29,14 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting
+// max=1000: 单用户本地工具, 但 URL 去重搜索按击键防抖逐次触发请求、批量录入/编辑
+// 链接时 200/15min 会被击穿, 之后全部 API (含清空) 被拒 15 分钟且无服务端日志——
+// 表现为"功能不可用"。保留限流作基本防护, 阈值放宽到实际不可能触发的量级。
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
-  message: { success: false, error: "Too many requests" },
+  max: 1000,
+  standardHeaders: true,
+  message: { success: false, error: "请求过于频繁，请稍后重试" },
 });
 app.use("/api/", limiter);
 
